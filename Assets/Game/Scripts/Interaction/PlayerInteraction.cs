@@ -8,10 +8,23 @@ public class PlayerInteraction : MonoBehaviour
 
     private IInteractable currentInteractable;
     private Camera mainCamera;
+    private bool cameraErrorReported;
 
     private void Awake()
     {
-        mainCamera = Camera.main;
+        mainCamera = FindMainCamera();
+
+        if (mainCamera == null)
+        {
+            GameObject cameraObject = new GameObject("PlayerFallbackCamera");
+            cameraObject.transform.SetParent(transform);
+            cameraObject.transform.localPosition = new Vector3(0f, 1.6f, 0f);
+            cameraObject.transform.localRotation = Quaternion.identity;
+            mainCamera = cameraObject.AddComponent<Camera>();
+            mainCamera.tag = "MainCamera";
+            Debug.LogError("PlayerInteraction не нашёл Main Camera. Создана временная камера на игроке.", this);
+            cameraErrorReported = true;
+        }
     }
 
     private void Update()
@@ -26,7 +39,17 @@ public class PlayerInteraction : MonoBehaviour
 
     private void DetectInteractable()
     {
-        if (mainCamera == null) return;
+        if (mainCamera == null)
+        {
+            if (!cameraErrorReported)
+            {
+                Debug.LogError("PlayerInteraction не может определить объект: камера недоступна.", this);
+                cameraErrorReported = true;
+            }
+
+            currentInteractable = null;
+            return;
+        }
 
         // Луч пускается из центра экрана (прицела)
         Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
@@ -41,6 +64,29 @@ public class PlayerInteraction : MonoBehaviour
         }
 
         currentInteractable = null;
+    }
+
+    private Camera FindMainCamera()
+    {
+        Camera camera = Camera.main;
+        if (camera != null) return camera;
+
+        Camera[] cameras = FindObjectsOfType<Camera>();
+        return cameras.Length > 0 ? cameras[0] : null;
+    }
+
+    private void OnGUI()
+    {
+        if (currentInteractable == null) return;
+
+        GUIStyle style = new GUIStyle(GUI.skin.label)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = 18
+        };
+
+        GUI.Label(new Rect(0f, Screen.height - 90f, Screen.width, 40f),
+            currentInteractable.GetInteractPrompt(), style);
     }
 
     private void OnDrawGizmosSelected()
