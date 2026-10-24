@@ -1,5 +1,9 @@
 # Управление
 
+В проекте используется только новый Unity Input System
+(`com.unity.inputsystem`). Старый API `UnityEngine.Input` не используется.
+Игровые действия подключаются через Input Actions или API нового Input System.
+
 | Действие | Клавиша |
 |---|---|
 | Движение | WASD |
