@@ -1,28 +1,28 @@
 using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 public class PlayerInteraction : MonoBehaviour
 {
     [SerializeField] private float interactDistance = 3f;
     [SerializeField] private LayerMask interactableLayer;
     [SerializeField] private KeyCode interactKey = KeyCode.E;
+    [SerializeField] private Camera interactionCamera;
 
     private IInteractable currentInteractable;
-    private Camera mainCamera;
     private bool cameraErrorReported;
 
     private void Awake()
     {
-        mainCamera = FindMainCamera();
-
-        if (mainCamera == null)
+        if (interactionCamera == null)
         {
-            GameObject cameraObject = new GameObject("PlayerFallbackCamera");
-            cameraObject.transform.SetParent(transform);
-            cameraObject.transform.localPosition = new Vector3(0f, 1.6f, 0f);
-            cameraObject.transform.localRotation = Quaternion.identity;
-            mainCamera = cameraObject.AddComponent<Camera>();
-            mainCamera.tag = "MainCamera";
-            Debug.LogError("PlayerInteraction не нашёл Main Camera. Создана временная камера на игроке.", this);
+            interactionCamera = FindMainCamera();
+        }
+
+        if (interactionCamera == null)
+        {
+            Debug.LogError("PlayerInteraction не нашёл камеру. Назначьте Main Camera в поле Interaction Camera.", this);
             cameraErrorReported = true;
         }
     }
@@ -31,7 +31,7 @@ public class PlayerInteraction : MonoBehaviour
     {
         DetectInteractable();
 
-        if (currentInteractable != null && Input.GetKeyDown(interactKey))
+        if (currentInteractable != null && IsInteractPressed())
         {
             currentInteractable.Interact();
         }
@@ -39,7 +39,7 @@ public class PlayerInteraction : MonoBehaviour
 
     private void DetectInteractable()
     {
-        if (mainCamera == null)
+        if (interactionCamera == null)
         {
             if (!cameraErrorReported)
             {
@@ -52,11 +52,12 @@ public class PlayerInteraction : MonoBehaviour
         }
 
         // Луч пускается из центра экрана (прицела)
-        Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+        Ray ray = interactionCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
 
         if (Physics.Raycast(ray, out RaycastHit hit, interactDistance, interactableLayer))
         {
-            if (hit.collider.TryGetComponent<IInteractable>(out var interactable))
+            IInteractable interactable = hit.collider.GetComponentInParent<IInteractable>();
+            if (interactable != null)
             {
                 currentInteractable = interactable;
                 return;
@@ -64,6 +65,17 @@ public class PlayerInteraction : MonoBehaviour
         }
 
         currentInteractable = null;
+    }
+
+    private bool IsInteractPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        return interactKey == KeyCode.E &&
+               Keyboard.current != null &&
+               Keyboard.current.eKey.wasPressedThisFrame;
+#else
+        return Input.GetKeyDown(interactKey);
+#endif
     }
 
     private Camera FindMainCamera()
@@ -82,7 +94,8 @@ public class PlayerInteraction : MonoBehaviour
         GUIStyle style = new GUIStyle(GUI.skin.label)
         {
             alignment = TextAnchor.MiddleCenter,
-            fontSize = 18
+            fontSize = 18,
+            normal = { textColor = new Color(0.08f, 0.08f, 0.08f, 1f) }
         };
 
         GUI.Label(new Rect(0f, Screen.height - 90f, Screen.width, 40f),
@@ -91,9 +104,9 @@ public class PlayerInteraction : MonoBehaviour
 
     private void OnDrawGizmosSelected()
     {
-        if (mainCamera == null) return;
+        if (interactionCamera == null) return;
         Gizmos.color = Color.yellow;
-        Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+        Ray ray = interactionCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
         Gizmos.DrawRay(ray.origin, ray.direction * interactDistance);
     }
 }

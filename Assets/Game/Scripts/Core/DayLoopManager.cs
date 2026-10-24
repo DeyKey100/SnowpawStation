@@ -17,6 +17,8 @@ public class DayLoopManager : MonoBehaviour
     public int currentDay = 1;
     public DayState currentState = DayState.Morning;
 
+    public bool MorningTaskCompleted { get; private set; }
+
     private void Awake()
     {
         if (Instance == null) Instance = this;
@@ -44,10 +46,23 @@ public class DayLoopManager : MonoBehaviour
         Debug.Log($"[Snowpaw Station] День {currentDay}. Фаза: {currentState}");
     }
 
+    public void CompleteMorningTask()
+    {
+        if (currentState != DayState.Morning)
+        {
+            Debug.LogWarning("Утренняя задача недоступна вне фазы Morning.", this);
+            return;
+        }
+
+        MorningTaskCompleted = true;
+        AdvanceState();
+    }
+
     private void StartNextDay()
     {
         currentDay++;
         currentState = DayState.Morning;
+        MorningTaskCompleted = false;
         Debug.Log($" НАСТУПИЛ ДЕНЬ {currentDay}");
     }
 }
