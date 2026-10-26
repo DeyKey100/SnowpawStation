@@ -1,21 +1,193 @@
+using System.Collections;
 using UnityEngine;
 
-public class SnowPileInteractable : MonoBehaviour, IInteractable
+[ExecuteAlways]
+[DisallowMultipleComponent]
+public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
 {
+    [Header("References")]
     [SerializeField] private DayLoopManager dayLoopManager;
     [SerializeField] private Renderer snowRenderer;
     [SerializeField] private Collider snowCollider;
+    [SerializeField] private MeshFilter snowMeshFilter;
 
+    [Header("Clearing")]
+    [SerializeField, Min(0.1f)] private float clearingDuration = 1.25f;
+    [SerializeField, Min(0f)] private float sinkDistance = 0.08f;
+    [SerializeField] private AnimationCurve clearingEase = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+    [SerializeField, Range(8, 24)] private int moundSegments = 12;
+    [SerializeField, Range(2, 6)] private int moundRings = 4;
+
+    private Transform visualTransform;
+    private Vector3 initialLocalPosition;
+    private Vector3 initialLocalScale;
+    private Coroutine clearingRoutine;
     private bool cleared;
+    private int clearedDay = -1;
+    private int observedDay = -1;
+
+    private void Awake()
+    {
+        EnsureMoundMesh();
+        visualTransform = snowRenderer != null ? snowRenderer.transform : transform;
+        initialLocalPosition = visualTransform.localPosition;
+        initialLocalScale = visualTransform.localScale;
+
+        if (dayLoopManager == null)
+        {
+            dayLoopManager = DayLoopManager.Instance;
+        }
+        if (dayLoopManager != null)
+        {
+            observedDay = dayLoopManager.currentDay;
+        }
+    }
+
+    private void OnValidate()
+    {
+        EnsureMoundMesh();
+    }
+
+    private void EnsureMoundMesh()
+    {
+        if (snowMeshFilter == null)
+        {
+            snowMeshFilter = GetComponent<MeshFilter>();
+        }
+
+        if (snowMeshFilter == null)
+        {
+            return;
+        }
+
+        Mesh moundMesh = snowMeshFilter.sharedMesh;
+        if (moundMesh != null && moundMesh.name == "SnowPile_Mound")
+        {
+            return;
+        }
+
+        moundMesh = CreateMoundMesh();
+        moundMesh.name = "SnowPile_Mound";
+        snowMeshFilter.sharedMesh = moundMesh;
+    }
+
+    private Mesh CreateMoundMesh()
+    {
+        int segments = Mathf.Clamp(moundSegments, 8, 24);
+        int rings = Mathf.Clamp(moundRings, 2, 6);
+        int vertexCount = rings * segments + 2;
+        Vector3[] vertices = new Vector3[vertexCount];
+        Vector2[] uv = new Vector2[vertexCount];
+        int[] triangles = new int[rings * segments * 6 + segments * 3];
+
+        int vertexIndex = 0;
+        for (int ring = 0; ring < rings; ring++)
+        {
+            float normalizedHeight = (float)ring / rings;
+            float height = Mathf.Lerp(-0.5f, 0.5f, normalizedHeight);
+            float radius = 0.5f * Mathf.Sqrt(1f - normalizedHeight * normalizedHeight);
+
+            for (int segment = 0; segment < segments; segment++)
+            {
+                float angle = segment * Mathf.PI * 2f / segments;
+                float irregularity = 1f + 0.035f * Mathf.Sin(segment * 3.17f + ring * 1.41f);
+                vertices[vertexIndex] = new Vector3(
+                    Mathf.Cos(angle) * radius * irregularity,
+                    height,
+                    Mathf.Sin(angle) * radius * irregularity);
+                uv[vertexIndex] = new Vector2(segment / (float)segments, normalizedHeight);
+                vertexIndex++;
+            }
+        }
+
+        int topIndex = vertexIndex;
+        vertices[topIndex] = new Vector3(0f, 0.5f, 0f);
+        uv[topIndex] = new Vector2(0.5f, 1f);
+
+        int triangleIndex = 0;
+        for (int ring = 0; ring < rings - 1; ring++)
+        {
+            int currentRingStart = ring * segments;
+            int nextRingStart = (ring + 1) * segments;
+            for (int segment = 0; segment < segments; segment++)
+            {
+                int nextSegment = (segment + 1) % segments;
+                triangles[triangleIndex++] = currentRingStart + segment;
+                triangles[triangleIndex++] = nextRingStart + segment;
+                triangles[triangleIndex++] = nextRingStart + nextSegment;
+                triangles[triangleIndex++] = currentRingStart + segment;
+                triangles[triangleIndex++] = nextRingStart + nextSegment;
+                triangles[triangleIndex++] = currentRingStart + nextSegment;
+            }
+        }
+
+        int bottomCenterIndex = topIndex + 1;
+        vertices[bottomCenterIndex] = new Vector3(0f, -0.5f, 0f);
+        uv[bottomCenterIndex] = new Vector2(0.5f, 0f);
+        int topRingStart = (rings - 1) * segments;
+        for (int segment = 0; segment < segments; segment++)
+        {
+            int nextSegment = (segment + 1) % segments;
+            triangles[triangleIndex++] = bottomCenterIndex;
+            triangles[triangleIndex++] = nextSegment;
+            triangles[triangleIndex++] = segment;
+            triangles[triangleIndex++] = topIndex;
+            triangles[triangleIndex++] = topRingStart + segment;
+            triangles[triangleIndex++] = topRingStart + nextSegment;
+        }
+
+        Mesh mesh = new Mesh
+        {
+            vertices = vertices,
+            triangles = triangles,
+            uv = uv
+        };
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    private void Update()
+    {
+        if (dayLoopManager == null)
+        {
+            dayLoopManager = DayLoopManager.Instance;
+        }
+
+        if (dayLoopManager != null && dayLoopManager.currentDay != observedDay)
+        {
+            observedDay = dayLoopManager.currentDay;
+            ResetForNewDay();
+        }
+    }
 
     public string GetInteractPrompt()
     {
-        return cleared ? string.Empty : "[E] Расчистить сугроб";
+        RefreshForNewDay();
+
+        if (cleared)
+        {
+            return string.Empty;
+        }
+
+        if (clearingRoutine != null)
+        {
+            return "Расчищаем сугроб...";
+        }
+
+        if (!CanClearDuringCurrentPhase())
+        {
+            return string.Empty;
+        }
+
+        return "[E] Расчистить сугроб";
     }
 
     public void Interact()
     {
-        if (cleared)
+        RefreshForNewDay();
+
+        if (cleared || clearingRoutine != null)
         {
             return;
         }
@@ -26,25 +198,129 @@ public class SnowPileInteractable : MonoBehaviour, IInteractable
             return;
         }
 
-        if (dayLoopManager.currentState != DayLoopManager.DayState.Morning)
+        if (!CanClearDuringCurrentPhase())
         {
-            Debug.Log("Сейчас не утренняя фаза. Сугроб можно будет убрать утром.", this);
+            Debug.Log("Сейчас сугроб нельзя расчищать: дождитесь утренней фазы.", this);
             return;
         }
 
-        cleared = true;
+        clearingRoutine = StartCoroutine(ClearSnowRoutine());
+    }
 
-        if (snowRenderer != null)
+    private bool CanClearDuringCurrentPhase()
+    {
+        if (dayLoopManager == null)
         {
-            snowRenderer.enabled = false;
+            return false;
         }
+
+        return dayLoopManager.currentState == DayLoopManager.DayState.Morning ||
+               dayLoopManager.MorningTaskCompleted;
+    }
+
+    private IEnumerator ClearSnowRoutine()
+    {
+        Vector3 startPosition = initialLocalPosition;
+        Vector3 startScale = initialLocalScale;
+        Vector3 endPosition = startPosition + Vector3.down * sinkDistance;
+        Vector3 endScale = new Vector3(startScale.x, 0.01f, startScale.z);
 
         if (snowCollider != null)
         {
             snowCollider.enabled = false;
         }
 
-        Debug.Log("[Snowpaw Station] Сугроб расчищен. Утро завершено.", this);
-        dayLoopManager.CompleteMorningTask();
+        float elapsed = 0f;
+        while (elapsed < clearingDuration)
+        {
+            elapsed += Time.deltaTime;
+            float normalizedTime = Mathf.Clamp01(elapsed / clearingDuration);
+            float easedTime = clearingEase != null
+                ? clearingEase.Evaluate(normalizedTime)
+                : Mathf.SmoothStep(0f, 1f, normalizedTime);
+
+            visualTransform.localPosition = Vector3.LerpUnclamped(
+                startPosition,
+                endPosition,
+                easedTime);
+            visualTransform.localScale = Vector3.LerpUnclamped(
+                startScale,
+                endScale,
+                easedTime);
+            yield return null;
+        }
+
+        visualTransform.localPosition = endPosition;
+        visualTransform.localScale = endScale;
+        cleared = true;
+        clearedDay = dayLoopManager != null ? dayLoopManager.currentDay : -1;
+        clearingRoutine = null;
+
+        if (snowRenderer != null)
+        {
+            snowRenderer.enabled = false;
+        }
+
+        if (dayLoopManager != null && !dayLoopManager.MorningTaskCompleted &&
+            dayLoopManager.currentState == DayLoopManager.DayState.Morning)
+        {
+            Debug.Log("[Snowpaw Station] Обязательный сугроб расчищен. Утро завершено.", this);
+            dayLoopManager.CompleteMorningTask();
+        }
+        else
+        {
+            Debug.Log("[Snowpaw Station] Дополнительный сугроб расчищен.", this);
+        }
+    }
+
+    private void RefreshForNewDay()
+    {
+        if (dayLoopManager == null || clearedDay < 0 ||
+            dayLoopManager.currentDay == clearedDay)
+        {
+            return;
+        }
+
+        observedDay = dayLoopManager.currentDay;
+        ResetForNewDay();
+    }
+
+    private void ResetForNewDay()
+    {
+        if (clearingRoutine != null)
+        {
+            StopCoroutine(clearingRoutine);
+            clearingRoutine = null;
+        }
+
+        cleared = false;
+        clearedDay = -1;
+        visualTransform.localPosition = initialLocalPosition;
+        visualTransform.localScale = initialLocalScale;
+
+        if (snowRenderer != null)
+        {
+            snowRenderer.enabled = true;
+        }
+
+        if (snowCollider != null)
+        {
+            snowCollider.enabled = true;
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (clearingRoutine != null)
+        {
+            StopCoroutine(clearingRoutine);
+            clearingRoutine = null;
+        }
+
+        if (visualTransform != null)
+        {
+            visualTransform.localPosition = initialLocalPosition;
+            visualTransform.localScale = initialLocalScale;
+        }
     }
 }

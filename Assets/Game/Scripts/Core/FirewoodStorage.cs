@@ -6,6 +6,9 @@ public class FirewoodStorage : MonoBehaviour
     [SerializeField, Min(1)] private int maxFirewood = 3;
 
     public int FirewoodCount => firewoodCount;
+    public int MaxFirewood => maxFirewood;
+    public bool CanAddFirewood => firewoodCount < maxFirewood;
+    public bool HasFirewood => firewoodCount > 0;
 
     public bool TryAddFirewood()
     {

@@ -6,7 +6,9 @@ public class WoodPileInteractable : MonoBehaviour, IInteractable
 
     public string GetInteractPrompt()
     {
-        return "[E] Взять полено";
+        return storage != null && storage.CanAddFirewood
+            ? "[E] Взять полено"
+            : string.Empty;
     }
 
     public void Interact()

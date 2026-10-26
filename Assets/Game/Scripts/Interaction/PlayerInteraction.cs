@@ -12,9 +12,20 @@ public class PlayerInteraction : MonoBehaviour
 
     private IInteractable currentInteractable;
     private bool cameraErrorReported;
+    private Texture2D promptBackground;
+
+    private void OnDestroy()
+    {
+        if (promptBackground != null)
+        {
+            Destroy(promptBackground);
+        }
+    }
 
     private void Awake()
     {
+        promptBackground = MakeSolidTexture(new Color(0.02f, 0.03f, 0.04f, 0.82f));
+
         if (interactionCamera == null)
         {
             interactionCamera = FindMainCamera();
@@ -83,7 +94,7 @@ public class PlayerInteraction : MonoBehaviour
         Camera camera = Camera.main;
         if (camera != null) return camera;
 
-        Camera[] cameras = FindObjectsOfType<Camera>();
+        Camera[] cameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
         return cameras.Length > 0 ? cameras[0] : null;
     }
 
@@ -91,15 +102,46 @@ public class PlayerInteraction : MonoBehaviour
     {
         if (currentInteractable == null) return;
 
+        string prompt = currentInteractable.GetInteractPrompt();
+        if (string.IsNullOrWhiteSpace(prompt)) return;
+
+        GUIStyle boxStyle = new GUIStyle(GUI.skin.box)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            normal =
+            {
+                background = promptBackground,
+                textColor = Color.white
+            }
+        };
+
         GUIStyle style = new GUIStyle(GUI.skin.label)
         {
             alignment = TextAnchor.MiddleCenter,
-            fontSize = 18,
-            normal = { textColor = new Color(0.08f, 0.08f, 0.08f, 1f) }
+            fontSize = 24,
+            fontStyle = FontStyle.Bold,
+            padding = new RectOffset(18, 18, 0, 0),
+            normal = { textColor = Color.white }
         };
 
-        GUI.Label(new Rect(0f, Screen.height - 90f, Screen.width, 40f),
-            currentInteractable.GetInteractPrompt(), style);
+        Vector2 textSize = style.CalcSize(new GUIContent(prompt));
+        float promptWidth = Mathf.Clamp(textSize.x + 36f, 260f, Screen.width - 32f);
+        Rect promptRect = new Rect(
+            Screen.width * 0.5f - promptWidth * 0.5f,
+            Screen.height - 105f,
+            promptWidth,
+            52f);
+
+        GUI.Box(promptRect, GUIContent.none, boxStyle);
+        GUI.Label(promptRect, prompt, style);
+    }
+
+    private Texture2D MakeSolidTexture(Color color)
+    {
+        Texture2D texture = new Texture2D(1, 1);
+        texture.SetPixel(0, 0, color);
+        texture.Apply();
+        return texture;
     }
 
     private void OnDrawGizmosSelected()

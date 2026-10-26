@@ -25,6 +25,14 @@ public class DayLoopManager : MonoBehaviour
         else Destroy(gameObject);
     }
 
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
     public void AdvanceState()
     {
         switch (currentState)
