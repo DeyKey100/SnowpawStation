@@ -1,0 +1,48 @@
+PSX Gas Station Kit Free
+
+Documentation
+
+Every prop is a prefab in Assets/PSXGasStationKitFree/Prefabs/ (PF_<prop>): drag it into a scene. 1 unit = 1 m; a prop's pivot
+is on the floor (or, for a wall prop, on the wall) it rests against. Each part has a box collider.
+
+Look
+Every prefab uses Materials/, which use the shader PSXGasStationKitFree/PSX Unlit: the texture times the baked
+vertex shading, unlit, with the PS1's vertex snap (Vertex Snap: rows on screen, 0 = off) and Unity's fog.
+Affine Texture Warp (0 as shipped, up to 1) gives the PS1's swimming textures, most on big faces seen close.
+Render pipelines: Built-in and URP: the materials use the pack's one-pass unlit shader (vertex snap, fog, and an affine texture warp to turn on), which both render. Not HDRP.
+
+Animations
+A prop with moving parts has an Animation component with its clips; nothing plays on its own:
+    GetComponent<Animation>().Play("open");
+Demo/L_Demo.unity circles the props and plays every animation in turn (Scripts/PropsDemo.cs).
+Left/right selects a prop, A shows the catalog, drag orbits, right-drag pans, the wheel zooms,
+Space toggles auto orbit, R resets the view. Animations keep playing in either view.
+
+Machines
+A prop that works (its kind is in the list below) has Scripts/Machine.cs on its prefab, set up in the
+inspector: its kind (what a use does: Switch, Button, Turn, Slot, Keypad, Panel, Item, Powered, Gauge),
+the machines it needs to be powered, and UnityEvents for what it does (onSwitched, onLive, onRefused,
+onUsed, onKeyed, onPicked). Machine.cs's comments say what each kind does.
+    lever.Use(carried);                     // the player's use; carried: the items they hold
+    keypad.Use(carried, "keypad_key_4");    // a key: the part they point at
+    door.needs = new[] { lever };           // the door is powered while the lever is on
+
+Textures: T_atlas.png 2048x2048, T_canopy_soffit.png 128x128, T_ext_base.png 128x128, T_ext_block.png 128x128, T_forecourt.png 128x128, T_forecourt_oil.png 128x128, T_store_base.png 128x128, T_store_paint.png 128x128, point filtered, no mipmaps.
+Icons/: an inventory icon per prop, T_<prop>, imported as a UI sprite.
+
+Props (triangles, size in metres: width x height x depth, animations)
+- forecourt: Forecourt Slab, 32 tris, 4 x 0 x 4
+- forecourt_oil: Oily Forecourt Slab, 32 tris, 4 x 0 x 4
+- wall_shopfront: Shopfront Wall, 68 tris, 2 x 3 x 0.2
+- wall_shopfront_doorway: Shopfront Doorway, 56 tris, 2 x 3 x 0.2
+- door_shop: Shop Doors, 342 tris, 1.74 x 2.55 x 0.295, open
+- window_shop: Shop Window, 68 tris, 2 x 2.15 x 0.28
+- fuel_pump: Fuel Pump, 162 tris, 0.997 x 2.05 x 0.52, lift; a machine, switch
+- pump_island: Pump Island, 52 tris, 4 x 0.15 x 1.2
+- bollard: Bollard, 62 tris, 0.2 x 1.08 x 0.2
+- canopy_column: Canopy Column, 40 tris, 0.45 x 4.6 x 0.45
+- canopy_deck: Canopy Deck, 152 tris, 4 x 0.648 x 4; a machine, powered
+- canopy_fascia: Canopy Fascia, 14 tris, 4 x 1 x 0.102; a machine, powered
+- canopy_fascia_logo: Canopy Fascia, NOVA, 14 tris, 4 x 1 x 0.102; a machine, powered
+- canopy_corner: Canopy Corner, 12 tris, 0.1 x 1 x 0.1
+- payphone: Pay Phone, 92 tris, 0.62 x 1.97 x 0.475, swing

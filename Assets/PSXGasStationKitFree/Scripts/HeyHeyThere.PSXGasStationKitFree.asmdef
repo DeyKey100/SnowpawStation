@@ -1,0 +1,7 @@
+{
+    "name": "HeyHeyThere.PSXGasStationKitFree",
+    "rootNamespace": "HeyHeyThere.PSXGasStationKitFree",
+    "references": ["Unity.InputSystem"],
+    "versionDefines": [{"name": "com.unity.inputsystem", "expression": "1.0.0", "define": "INPUT_SYSTEM_PACKAGE"}],
+    "autoReferenced": true
+}

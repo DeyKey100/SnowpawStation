@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "com.unity.ai.navigation": "2.0.15",
+    "com.unity.ai.inference": "2.6.1",
     "com.unity.asset-manager-for-unity": "1.12.0",
     "com.unity.cinemachine": "3.1.7",
     "com.unity.collab-proxy": "2.13.6",
