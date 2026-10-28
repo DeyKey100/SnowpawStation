@@ -48,6 +48,8 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
         EnsureMoundMesh();
     }
 
+    private const string MoundMeshName = "SnowPile_Mound_v3";
+
     private void EnsureMoundMesh()
     {
         if (snowMeshFilter == null)
@@ -61,14 +63,31 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
         }
 
         Mesh moundMesh = snowMeshFilter.sharedMesh;
-        if (moundMesh != null && moundMesh.name == "SnowPile_Mound")
+        if (moundMesh != null && moundMesh.name == MoundMeshName)
         {
             return;
         }
 
         moundMesh = CreateMoundMesh();
-        moundMesh.name = "SnowPile_Mound";
+        moundMesh.name = MoundMeshName;
         snowMeshFilter.sharedMesh = moundMesh;
+    }
+
+    [ContextMenu("Rebuild Snow Mound Mesh")]
+    private void RebuildMoundMesh()
+    {
+        if (snowMeshFilter == null)
+        {
+            snowMeshFilter = GetComponent<MeshFilter>();
+        }
+
+        if (snowMeshFilter == null)
+        {
+            return;
+        }
+
+        snowMeshFilter.sharedMesh = null;
+        EnsureMoundMesh();
     }
 
     private Mesh CreateMoundMesh()
@@ -78,14 +97,15 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
         int vertexCount = rings * segments + 2;
         Vector3[] vertices = new Vector3[vertexCount];
         Vector2[] uv = new Vector2[vertexCount];
-        int[] triangles = new int[rings * segments * 6 + segments * 3];
+        int[] triangles = new int[rings * segments * 6];
 
         int vertexIndex = 0;
         for (int ring = 0; ring < rings; ring++)
         {
             float normalizedHeight = (float)ring / rings;
-            float height = Mathf.Lerp(-0.5f, 0.5f, normalizedHeight);
-            float radius = 0.5f * Mathf.Sqrt(1f - normalizedHeight * normalizedHeight);
+            float domeHeight = Mathf.Sin(normalizedHeight * Mathf.PI * 0.5f);
+            float height = Mathf.Lerp(-0.5f, 0.5f, domeHeight);
+            float radius = 0.5f * Mathf.Sqrt(Mathf.Max(0f, 1f - domeHeight * domeHeight));
 
             for (int segment = 0; segment < segments; segment++)
             {
@@ -95,16 +115,22 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
                     Mathf.Cos(angle) * radius * irregularity,
                     height,
                     Mathf.Sin(angle) * radius * irregularity);
-                uv[vertexIndex] = new Vector2(segment / (float)segments, normalizedHeight);
+                uv[vertexIndex] = new Vector2(segment / (float)segments, domeHeight);
                 vertexIndex++;
             }
         }
 
-        int topIndex = vertexIndex;
+        int topIndex = rings * segments;
         vertices[topIndex] = new Vector3(0f, 0.5f, 0f);
         uv[topIndex] = new Vector2(0.5f, 1f);
 
+        int bottomCenterIndex = topIndex + 1;
+        vertices[bottomCenterIndex] = new Vector3(0f, -0.5f, 0f);
+        uv[bottomCenterIndex] = new Vector2(0.5f, 0f);
+
         int triangleIndex = 0;
+
+        // Боковые грани: обход даёт нормали наружу.
         for (int ring = 0; ring < rings - 1; ring++)
         {
             int currentRingStart = ring * segments;
@@ -121,19 +147,23 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
             }
         }
 
-        int bottomCenterIndex = topIndex + 1;
-        vertices[bottomCenterIndex] = new Vector3(0f, -0.5f, 0f);
-        uv[bottomCenterIndex] = new Vector2(0.5f, 0f);
+        // Верхняя крышка: полюс -> следующий сегмент -> текущий, нормали смотрят вверх (+Y).
         int topRingStart = (rings - 1) * segments;
         for (int segment = 0; segment < segments; segment++)
         {
             int nextSegment = (segment + 1) % segments;
-            triangles[triangleIndex++] = bottomCenterIndex;
-            triangles[triangleIndex++] = nextSegment;
-            triangles[triangleIndex++] = segment;
             triangles[triangleIndex++] = topIndex;
-            triangles[triangleIndex++] = topRingStart + segment;
             triangles[triangleIndex++] = topRingStart + nextSegment;
+            triangles[triangleIndex++] = topRingStart + segment;
+        }
+
+        // Нижняя крышка: нормали смотрят вниз (-Y), чтобы меш был замкнутым.
+        for (int segment = 0; segment < segments; segment++)
+        {
+            int nextSegment = (segment + 1) % segments;
+            triangles[triangleIndex++] = bottomCenterIndex;
+            triangles[triangleIndex++] = segment;
+            triangles[triangleIndex++] = nextSegment;
         }
 
         Mesh mesh = new Mesh
