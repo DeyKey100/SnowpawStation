@@ -5,6 +5,7 @@
   <Project Path="Unity.PlasticSCM.Editor.csproj" />
   <Project Path="Unity.AppUI.csproj" />
   <Project Path="Unity.Cloud.Assets.Embedded.csproj" />
+  <Project Path="MCPForUnity.Runtime.csproj" />
   <Project Path="Unity.ShaderGraph.Editor.csproj" />
   <Project Path="Unity.RenderPipelines.Core.Runtime.csproj" />
   <Project Path="Unity.Mathematics.csproj" />
@@ -30,6 +31,7 @@
   <Project Path="Unity.VisualStudio.Editor.csproj" />
   <Project Path="Unity.AssetManager.Core.Editor.csproj" />
   <Project Path="PPv2URPConverters.csproj" />
+  <Project Path="MCPForUnity.Editor.csproj" />
   <Project Path="Unity.Cloud.Identity.Editor.Embedded.csproj" />
   <Project Path="Unity.InferenceEngine.csproj" />
   <Project Path="Unity.Searcher.Editor.csproj" />
