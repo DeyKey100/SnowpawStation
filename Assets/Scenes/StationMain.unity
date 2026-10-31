@@ -1075,6 +1075,7 @@ GameObject:
   - component: {fileID: 420484900}
   - component: {fileID: 420484901}
   - component: {fileID: 420484902}
+  - component: {fileID: 420484903}
   m_Layer: 0
   m_Name: GameSystems
   m_TagString: Untagged
@@ -1141,6 +1142,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   firewoodCount: 0
   maxFirewood: 3
+--- !u!114 &420484903
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 420484898}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 46994032883bb1e479f3b58ed355a9b9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &438203929
 GameObject:
   m_ObjectHideFlags: 0
@@ -5138,6 +5151,60 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 9133304443088927207, guid: 028c14aafbe82de9bc101bf2c0a3162c, type: 3}
   m_PrefabInstance: {fileID: 1898501225}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &2002159138
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2002159140}
+  - component: {fileID: 2002159139}
+  m_Layer: 0
+  m_Name: Door_Enter
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2002159139
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2002159138}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5c24a3840e2aaf4abc093a3106b952f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  promptText: "E - \u0432\u043E\u0439\u0442\u0438"
+  plateWorldOffsetY: 1.2
+  targetSceneName: GasStationInterior
+  movePlayerToSpawn: 1
+  spawnPosition: {x: 0, y: 0.02, z: 1.2}
+  spawnYaw: 180
+  playerTag: Player
+  activateDistance: 2.4
+  maxVerticalDifference: 3
+  inputLockDuration: 0.35
+--- !u!4 &2002159140
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2002159138}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -7, y: 0.5, z: -22.855}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &2004454658
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -5607,3 +5674,4 @@ SceneRoots:
   - {fileID: 66590381}
   - {fileID: 1418047645}
   - {fileID: 632781226}
+  - {fileID: 2002159140}
