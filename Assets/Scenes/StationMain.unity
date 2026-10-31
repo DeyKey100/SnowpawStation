@@ -3998,6 +3998,9 @@ GameObject:
   m_Component:
   - component: {fileID: 1418047645}
   - component: {fileID: 1418047646}
+  - component: {fileID: 1418047647}
+  - component: {fileID: 1418047648}
+  - component: {fileID: 1418047649}
   m_Layer: 0
   m_Name: StationHUD
   m_TagString: Untagged
@@ -4032,8 +4035,51 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a08667cda54375428729795e6c38b70, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  dayLoopManager: {fileID: 0}
-  heatSystem: {fileID: 0}
+  dayLoopManager: {fileID: 420484900}
+  heatSystem: {fileID: 420484901}
+--- !u!114 &1418047647
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1418047644}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 330d8e18224658b47b55cdde2c29fd71, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  musicPlayer: {fileID: 1418047648}
+  panelWidth: 420
+--- !u!114 &1418047648
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1418047644}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f5b8f32d0cab8b4089606326e923de6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  musicClip: {fileID: 8300000, guid: a8bcd53948556354eae657bcb6c39849, type: 3}
+  defaultVolume: 0.1
+  musicEnabledByDefault: 1
+--- !u!114 &1418047649
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1418047644}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d28c361aae829de45af3b3f0a93becc0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  dotSize: 4
+  dotColor: {r: 1, g: 1, b: 1, a: 0.85}
 --- !u!1001 &1515773063
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -5457,6 +5503,7 @@ SceneRoots:
   m_Roots:
   - {fileID: 410087041}
   - {fileID: 832575519}
+  - {fileID: 1418047645}
   - {fileID: 420484899}
   - {fileID: 1572513107}
   - {fileID: 854133921}
@@ -5468,4 +5515,3 @@ SceneRoots:
   - {fileID: 688485276}
   - {fileID: 950149609}
   - {fileID: 66590381}
-  - {fileID: 1418047645}

@@ -40,6 +40,12 @@ public class PlayerInteraction : MonoBehaviour
 
     private void Update()
     {
+        if (PauseMenu.IsPaused)
+        {
+            currentInteractable = null;
+            return;
+        }
+
         DetectInteractable();
 
         if (currentInteractable != null && IsInteractPressed())
