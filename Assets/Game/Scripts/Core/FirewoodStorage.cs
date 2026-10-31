@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class FirewoodStorage : MonoBehaviour
@@ -10,6 +11,13 @@ public class FirewoodStorage : MonoBehaviour
     public bool CanAddFirewood => firewoodCount < maxFirewood;
     public bool HasFirewood => firewoodCount > 0;
 
+    public event Action<int, int> FirewoodChanged;
+
+    private void Start()
+    {
+        FirewoodChanged?.Invoke(firewoodCount, maxFirewood);
+    }
+
     public bool TryAddFirewood()
     {
         if (firewoodCount >= maxFirewood)
@@ -19,6 +27,7 @@ public class FirewoodStorage : MonoBehaviour
         }
 
         firewoodCount++;
+        FirewoodChanged?.Invoke(firewoodCount, maxFirewood);
         Debug.Log($"[Snowpaw Station] Дров в запасе: {firewoodCount}/{maxFirewood}.", this);
         return true;
     }
@@ -32,6 +41,7 @@ public class FirewoodStorage : MonoBehaviour
         }
 
         firewoodCount--;
+        FirewoodChanged?.Invoke(firewoodCount, maxFirewood);
         Debug.Log($"[Snowpaw Station] Дров в запасе: {firewoodCount}/{maxFirewood}.", this);
         return true;
     }

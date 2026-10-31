@@ -1,4 +1,0 @@
-- НИКОГДА не правь .unity / .prefab / .asset / .meta напрямую — только через unity-mcp тулзы.
-- Ссылки на объекты — [SerializeField], не GetComponent в Update.
-- Данные — ScriptableObject, не хардкод.
-- Input System (new), не legacy.
