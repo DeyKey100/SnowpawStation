@@ -60,6 +60,7 @@ public class StoveInteractable : MonoBehaviour, IInteractable
         }
 
         heatSystem.AddHeat(heatPerInteraction);
+        DayLoopManager.Instance?.NotifyStoveFueled();
         pulseTime = 0f;
     }
 

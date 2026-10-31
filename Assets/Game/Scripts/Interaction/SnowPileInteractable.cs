@@ -39,7 +39,7 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
         }
         if (dayLoopManager != null)
         {
-            observedDay = dayLoopManager.currentDay;
+            observedDay = dayLoopManager.CurrentDay;
         }
     }
 
@@ -184,9 +184,9 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
             dayLoopManager = DayLoopManager.Instance;
         }
 
-        if (dayLoopManager != null && dayLoopManager.currentDay != observedDay)
+        if (dayLoopManager != null && dayLoopManager.CurrentDay != observedDay)
         {
-            observedDay = dayLoopManager.currentDay;
+            observedDay = dayLoopManager.CurrentDay;
             ResetForNewDay();
         }
     }
@@ -244,7 +244,7 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
             return false;
         }
 
-        return dayLoopManager.currentState == DayLoopManager.DayState.Morning ||
+        return dayLoopManager.CurrentState == DayLoopManager.DayState.Morning ||
                dayLoopManager.MorningTaskCompleted;
     }
 
@@ -283,7 +283,7 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
         visualTransform.localPosition = endPosition;
         visualTransform.localScale = endScale;
         cleared = true;
-        clearedDay = dayLoopManager != null ? dayLoopManager.currentDay : -1;
+        clearedDay = dayLoopManager != null ? dayLoopManager.CurrentDay : -1;
         clearingRoutine = null;
 
         if (snowRenderer != null)
@@ -291,10 +291,9 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
             snowRenderer.enabled = false;
         }
 
-        if (dayLoopManager != null && !dayLoopManager.MorningTaskCompleted &&
-            dayLoopManager.currentState == DayLoopManager.DayState.Morning)
+        if (dayLoopManager != null && dayLoopManager.CurrentState == DayLoopManager.DayState.Morning)
         {
-            Debug.Log("[Snowpaw Station] Обязательный сугроб расчищен. Утро завершено.", this);
+            Debug.Log("[Snowpaw Station] Сугроб расчищен.", this);
             dayLoopManager.CompleteMorningTask();
         }
         else
@@ -306,12 +305,12 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
     private void RefreshForNewDay()
     {
         if (dayLoopManager == null || clearedDay < 0 ||
-            dayLoopManager.currentDay == clearedDay)
+            dayLoopManager.CurrentDay == clearedDay)
         {
             return;
         }
 
-        observedDay = dayLoopManager.currentDay;
+        observedDay = dayLoopManager.CurrentDay;
         ResetForNewDay();
     }
 

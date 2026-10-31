@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class DayLoopManager : MonoBehaviour
@@ -14,15 +15,54 @@ public class DayLoopManager : MonoBehaviour
     }
 
     [Header("Current Progress")]
-    public int currentDay = 1;
-    public DayState currentState = DayState.Morning;
+    [SerializeField, Min(1)] private int currentDay = 1;
+    [SerializeField] private DayState currentState = DayState.Morning;
+    [SerializeField, Min(0f)] private float dayTransitionDelay = 10f;
 
+    public int CurrentDay => currentDay;
+    public DayState CurrentState => currentState;
     public bool MorningTaskCompleted { get; private set; }
+    public bool StoveFueledToday { get; private set; }
+    public float TransitionTimeRemaining { get; private set; }
+
+    public event Action<int, DayState> PhaseChanged;
+    public event Action<int> DayChanged;
+
+    private bool transitionStarted;
 
     private void Awake()
     {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        currentDay = Mathf.Max(1, currentDay);
+    }
+
+    private void Start()
+    {
+        PhaseChanged?.Invoke(currentDay, currentState);
+    }
+
+    private void Update()
+    {
+        if (!transitionStarted)
+        {
+            return;
+        }
+
+        TransitionTimeRemaining = Mathf.Max(0f, TransitionTimeRemaining - Time.deltaTime);
+        if (TransitionTimeRemaining <= 0f)
+        {
+            transitionStarted = false;
+            StartNextDay();
+        }
     }
 
     private void OnDestroy()
@@ -35,9 +75,19 @@ public class DayLoopManager : MonoBehaviour
 
     public void AdvanceState()
     {
+        if (transitionStarted)
+        {
+            return;
+        }
+
         switch (currentState)
         {
             case DayState.Morning:
+                if (!MorningTaskCompleted)
+                {
+                    Debug.LogWarning("Утро нельзя завершить до расчистки сугроба и растопки печи.", this);
+                    return;
+                }
                 currentState = DayState.WorkShift;
                 break;
             case DayState.WorkShift:
@@ -48,10 +98,47 @@ public class DayLoopManager : MonoBehaviour
                 break;
             case DayState.NightTransition:
                 StartNextDay();
-                break;
+                return;
         }
 
         Debug.Log($"[Snowpaw Station] День {currentDay}. Фаза: {currentState}");
+        PhaseChanged?.Invoke(currentDay, currentState);
+        TryStartDayTransition();
+    }
+
+    public void NotifyStoveFueled()
+    {
+        if ((currentState != DayState.Morning && currentState != DayState.WorkShift) || StoveFueledToday)
+        {
+            return;
+        }
+
+        StoveFueledToday = true;
+        TryCompleteMorning();
+    }
+
+    private void TryCompleteMorning()
+    {
+        if (currentState != DayState.Morning || !MorningTaskCompleted || !StoveFueledToday)
+        {
+            return;
+        }
+
+        currentState = DayState.WorkShift;
+        PhaseChanged?.Invoke(currentDay, currentState);
+        TryStartDayTransition();
+    }
+
+    private void TryStartDayTransition()
+    {
+        if (currentState != DayState.WorkShift || !MorningTaskCompleted || !StoveFueledToday || transitionStarted)
+        {
+            return;
+        }
+
+        transitionStarted = true;
+        TransitionTimeRemaining = dayTransitionDelay;
+        Debug.Log($"Подготовка выполнена. Следующий день через {dayTransitionDelay:0} сек.", this);
     }
 
     public void CompleteMorningTask()
@@ -63,7 +150,7 @@ public class DayLoopManager : MonoBehaviour
         }
 
         MorningTaskCompleted = true;
-        AdvanceState();
+        TryCompleteMorning();
     }
 
     private void StartNextDay()
@@ -71,6 +158,10 @@ public class DayLoopManager : MonoBehaviour
         currentDay++;
         currentState = DayState.Morning;
         MorningTaskCompleted = false;
+        StoveFueledToday = false;
+        TransitionTimeRemaining = 0f;
         Debug.Log($" НАСТУПИЛ ДЕНЬ {currentDay}");
+        DayChanged?.Invoke(currentDay);
+        PhaseChanged?.Invoke(currentDay, currentState);
     }
 }
