@@ -9,6 +9,8 @@ public sealed class PauseMenu : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private MusicPlayer musicPlayer;
+    [Tooltip("Назначать не обязательно: BlizzardManager создаётся кодом при запуске игры, ссылка подтягивается автоматически (Instance / FindFirstObjectByType).")]
+    [SerializeField] private BlizzardManager blizzardManager;
 
     [Header("Layout")]
     [SerializeField] private float panelWidth = 420f;
@@ -32,6 +34,8 @@ public sealed class PauseMenu : MonoBehaviour
         {
             musicPlayer = FindFirstObjectByType<MusicPlayer>();
         }
+
+        RefreshBlizzardReference();
     }
 
     private void Update()
@@ -150,7 +154,7 @@ public sealed class PauseMenu : MonoBehaviour
         EnsureStyles();
 
         float width = Mathf.Min(panelWidth, Screen.width - 40f);
-        float height = settingsOpen ? 300f : 250f;
+        float height = settingsOpen ? 426f : 250f;
         Rect panel = new Rect(
             (Screen.width - width) * 0.5f,
             (Screen.height - height) * 0.5f,
@@ -214,10 +218,56 @@ public sealed class PauseMenu : MonoBehaviour
 
         y += 44f;
 
+        RefreshBlizzardReference();
+        bool snowEnabled = blizzardManager != null && blizzardManager.IsEnabled;
+        string snowLabel = blizzardManager == null
+            ? "Метель: недоступна"
+            : $"Метель: {(snowEnabled ? "Вкл" : "Выкл")}";
+
+        if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), snowLabel, buttonStyle) &&
+            blizzardManager != null)
+        {
+            blizzardManager.SetEnabled(!snowEnabled);
+        }
+
+        y += buttonHeight + 14f;
+
+        float currentIntensity = blizzardManager != null ? blizzardManager.Intensity : 0f;
+        GUI.Label(
+            new Rect(x, y, buttonWidth, 24f),
+            blizzardManager == null
+                ? "Сила метели: недоступна"
+                : $"Сила метели: {currentIntensity * 100f:0}%",
+            labelStyle);
+
+        y += 28f;
+
+        float newIntensity = GUI.HorizontalSlider(new Rect(x, y, buttonWidth, 20f), currentIntensity, 0f, 1f);
+        if (blizzardManager != null && !Mathf.Approximately(newIntensity, currentIntensity))
+        {
+            blizzardManager.SetIntensity(newIntensity);
+        }
+
+        y += 44f;
+
         if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), "Назад", buttonStyle))
         {
             settingsOpen = false;
         }
+    }
+
+    private void RefreshBlizzardReference()
+    {
+        if (blizzardManager != null)
+        {
+            return;
+        }
+
+        // Менеджер метели создаётся кодом при загрузке игры — на момент Awake
+        // он может ещё не существовать, поэтому добираем ссылку здесь.
+        blizzardManager = BlizzardManager.Instance != null
+            ? BlizzardManager.Instance
+            : FindFirstObjectByType<BlizzardManager>();
     }
 
     private void EnsureStyles()
