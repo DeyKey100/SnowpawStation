@@ -4,6 +4,8 @@ public sealed class StationHud : MonoBehaviour
 {
     [SerializeField] private DayLoopManager dayLoopManager;
     [SerializeField] private StationHeatSystem heatSystem;
+    [SerializeField, Tooltip("Показывать HUD: текущий день, фаза смены и процент тепла.")]
+    private bool hud = true;
 
     private string phaseLabel = "Утро";
     private int displayedDay = 1;
@@ -102,6 +104,11 @@ public sealed class StationHud : MonoBehaviour
 
     private void OnGUI()
     {
+        if (!hud)
+        {
+            return;
+        }
+
         EnsureStyles();
 
         const float margin = 20f;
