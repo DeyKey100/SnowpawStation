@@ -71,6 +71,9 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 
+# Skills for mcp
+.claude/
+
 ### VisualStudioCode ###
 .vscode/*
 !.vscode/settings.json
