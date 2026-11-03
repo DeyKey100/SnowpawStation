@@ -14,6 +14,9 @@ public class PlayerInteraction : MonoBehaviour
     private bool cameraErrorReported;
     private Texture2D promptBackground;
 
+    /// <summary>Объект под прицелом у локального игрока (для дверных триггеров: приоритет у [E]-взаимодействия).</summary>
+    public static bool HasFocusedInteractable { get; private set; }
+
     private void OnDestroy()
     {
         if (promptBackground != null)
@@ -43,10 +46,20 @@ public class PlayerInteraction : MonoBehaviour
         if (PauseMenu.IsPaused)
         {
             currentInteractable = null;
+            HasFocusedInteractable = false;
+            return;
+        }
+
+        // Диалог/мини-игра/заправка держат InteractionLock: мир не интерактивен.
+        if (InteractionLock.IsLocked)
+        {
+            currentInteractable = null;
+            HasFocusedInteractable = false;
             return;
         }
 
         DetectInteractable();
+        HasFocusedInteractable = currentInteractable != null;
 
         if (currentInteractable != null && IsInteractPressed())
         {

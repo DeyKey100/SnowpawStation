@@ -34,6 +34,16 @@ public class SceneDoorTrigger : MonoBehaviour
 
     public bool PlayerInRange => playerInRange;
 
+    /// <summary>Открытка Котова ещё лежит на пороге — дверь не активна.</summary>
+    private static bool LetterWaitingOnDoorstep
+    {
+        get
+        {
+            KotovVisit kotov = StoryDirector.Instance != null ? StoryDirector.Instance.Kotov : null;
+            return kotov != null && kotov.IsLetterWaiting;
+        }
+    }
+
     private void Awake()
     {
         plateBackground = MakeSolidTexture(new Color(0.02f, 0.03f, 0.04f, 0.82f));
@@ -70,6 +80,19 @@ public class SceneDoorTrigger : MonoBehaviour
         }
 
         if (SceneLoadingScreen.IsLoading)
+        {
+            return;
+        }
+
+        // У порога может лежать открытка/предмет: [E] сначала отдаём объекту под прицелом,
+        // иначе дверь «съедала» нажатие и увезла игрока в другую сцену.
+        if (InteractionLock.IsLocked || PlayerInteraction.HasFocusedInteractable)
+        {
+            return;
+        }
+
+        // Открытка ещё не подобрана — дверь не открывается.
+        if (LetterWaitingOnDoorstep)
         {
             return;
         }
@@ -115,6 +138,13 @@ public class SceneDoorTrigger : MonoBehaviour
     private void OnGUI()
     {
         if (!playerInRange || viewCamera == null || plateBackground == null || SceneLoadingScreen.IsLoading)
+        {
+            return;
+        }
+
+        // Пока на пороге лежит открытка Котова, дверь не предлагает войти:
+        // сначала подбираем письмо, иначе [E] уводил в другую сцену.
+        if (LetterWaitingOnDoorstep)
         {
             return;
         }

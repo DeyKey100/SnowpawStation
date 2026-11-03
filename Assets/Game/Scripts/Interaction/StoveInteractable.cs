@@ -43,40 +43,76 @@ public class StoveInteractable : MonoBehaviour, IInteractable
         fireGlow.intensity = fireGlowIntensity * Mathf.Lerp(0.82f, 1.08f, flicker);
     }
 
+    private StationHeatSystem Heat
+    {
+        get
+        {
+            if (heatSystem == null)
+            {
+                // Перезагруженная сцена: сериализованная ссылка указывает на уничтоженный дубль GameSystems.
+                heatSystem = StationHeatSystem.Active;
+            }
+
+            return heatSystem;
+        }
+    }
+
+    private FirewoodStorage Wood
+    {
+        get
+        {
+            if (firewoodStorage == null)
+            {
+                firewoodStorage = FirewoodStorage.Active;
+            }
+
+            return firewoodStorage;
+        }
+    }
+
     public string GetInteractPrompt()
     {
-        if (heatSystem == null || firewoodStorage == null)
+        FirewoodStorage wood = Wood;
+        if (Heat == null || wood == null)
         {
             return string.Empty;
         }
 
         // Подсказка должна появляться при наведении всегда, иначе печь выглядит неинтерактивной.
-        return firewoodStorage.HasFirewood
+        return wood.HasFirewood
             ? "[E] Подбросить полено в печь"
             : "Нужны дрова - возьмите у поленницы";
     }
 
     public void Interact()
     {
-        if (heatSystem == null)
+        StationHeatSystem heat = Heat;
+        FirewoodStorage wood = Wood;
+
+        if (heat == null)
         {
-            Debug.LogError("StoveInteractable не назначил StationHeatSystem.", this);
+            Debug.LogError("StoveInteractable: StationHeatSystem не найден.", this);
             return;
         }
 
-        if (firewoodStorage == null)
+        if (wood == null)
         {
-            Debug.LogError("StoveInteractable не назначил FirewoodStorage.", this);
+            Debug.LogError("StoveInteractable: FirewoodStorage не найден.", this);
             return;
         }
 
-        if (!firewoodStorage.TryConsumeFirewood())
+        if (!wood.TryConsumeFirewood())
         {
             return;
         }
 
-        heatSystem.AddHeat(heatPerInteraction);
+        heat.AddHeat(heatPerInteraction);
         DayLoopManager.Instance?.NotifyStoveFueled();
+        // Нечёткое письмо у печи отогревается (тепло от 60%). Итерация по всем письмам.
+        for (int i = 1; i <= GameState.LetterCount; i++)
+        {
+            Letters.TryWarmUp(i);
+        }
         pulseTime = 0f;
     }
 

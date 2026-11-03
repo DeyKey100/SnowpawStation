@@ -48,6 +48,7 @@ public sealed class BlizzardManager : MonoBehaviour
     private GameObject snowObject;
     private ParticleSystem.VelocityOverLifetimeModule velocityModule;
     private ParticleSystem.NoiseModule noiseModule;
+    private bool snowBuilt;
     private Texture2D flakeTexture;
     private Material flakeMaterial;
     private Transform followTarget;
@@ -163,7 +164,7 @@ public sealed class BlizzardManager : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (snowParticles == null || !snowObject.activeSelf)
+        if (!snowBuilt || snowParticles == null || snowObject == null || !snowObject.activeSelf)
         {
             return;
         }
@@ -181,9 +182,12 @@ public sealed class BlizzardManager : MonoBehaviour
         float swayDegrees = (Mathf.PerlinNoise(Time.time * 0.03f, 9.1f) - 0.5f) * 50f;
         Vector3 wind = Quaternion.Euler(0f, swayDegrees, 0f) * windDirection * (windStrength * windScale * gust);
 
-        velocityModule.x = wind.x;
-        velocityModule.y = -fallSpeed;
-        velocityModule.z = wind.z;
+        // Модуль берём у системы каждый раз: закэшированная структура становится
+        // невалидной («Do not create your own module instances»), если система пересоздана.
+        ParticleSystem.VelocityOverLifetimeModule velocity = snowParticles.velocityOverLifetime;
+        velocity.x = wind.x;
+        velocity.y = -fallSpeed;
+        velocity.z = wind.z;
     }
 
     /// <summary>
@@ -279,14 +283,17 @@ public sealed class BlizzardManager : MonoBehaviour
     /// <summary>Применяет силу метели: ветер, турбулентность и бюджет частиц.</summary>
     private void ApplyIntensity()
     {
-        if (snowParticles == null)
+        if (!snowBuilt || snowParticles == null)
         {
             return;
         }
 
         // Слабый снег — слабый ветер; на максимуме ветер чуть сильнее базового.
         windScale = Mathf.Lerp(0.25f, 1.3f, intensity);
-        noiseModule.strength = gustStrength * Mathf.Lerp(0.4f, 1f, intensity);
+
+        ParticleSystem.NoiseModule noise = snowParticles.noise;
+        noise.strength = gustStrength * Mathf.Lerp(0.4f, 1f, intensity);
+        noiseModule = noise;
 
         ApplyParticleBudget();
         Apply();
@@ -298,7 +305,7 @@ public sealed class BlizzardManager : MonoBehaviour
     /// </summary>
     private void ApplyParticleBudget()
     {
-        if (snowParticles == null)
+        if (!snowBuilt || snowParticles == null)
         {
             return;
         }
@@ -379,6 +386,8 @@ public sealed class BlizzardManager : MonoBehaviour
         noiseModule.frequency = 0.18f;
         noiseModule.scrollSpeed = 0.6f;
         noiseModule.damping = true;
+
+        snowBuilt = true;
 
         ParticleSystemRenderer snowRenderer = snowObject.GetComponent<ParticleSystemRenderer>();
         snowRenderer.material = flakeMaterial;

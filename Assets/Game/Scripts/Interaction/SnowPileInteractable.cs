@@ -12,6 +12,8 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
     [SerializeField] private MeshFilter snowMeshFilter;
 
     [Header("Clearing")]
+    [SerializeField, Tooltip("Id утренней задачи: snow_door (дверь, день 1) или snow_pump1 (колонка №1, день 2).")]
+    private string taskId = "snow_door";
     [SerializeField, Min(0.1f)] private float clearingDuration = 1.25f;
     [SerializeField, Min(0f)] private float sinkDistance = 0.08f;
     [SerializeField] private AnimationCurve clearingEase = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
@@ -294,12 +296,41 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
         if (dayLoopManager != null && dayLoopManager.CurrentState == DayLoopManager.DayState.Morning)
         {
             Debug.Log("[Snowpaw Station] Сугроб расчищен.", this);
-            dayLoopManager.CompleteMorningTask();
+            dayLoopManager.NotifyMorningTaskDone(ResolveTaskId());
         }
         else
         {
             Debug.Log("[Snowpaw Station] Дополнительный сугроб расчищен.", this);
         }
+    }
+
+    /// <summary>
+    /// Задача сугроба зависит от дня (день 1 — дверь, день 2 — колонка №1).
+    /// Если заданный id в плане дня отсутствует, берём первую «снежную» задачу дня.
+    /// </summary>
+    private string ResolveTaskId()
+    {
+        var tasks = dayLoopManager.GetCurrentMorningTasks();
+        if (!string.IsNullOrEmpty(taskId))
+        {
+            for (int i = 0; i < tasks.Count; i++)
+            {
+                if (tasks[i].id == taskId)
+                {
+                    return taskId;
+                }
+            }
+        }
+
+        for (int i = 0; i < tasks.Count; i++)
+        {
+            if (tasks[i].id != null && tasks[i].id.StartsWith("snow"))
+            {
+                return tasks[i].id;
+            }
+        }
+
+        return null;
     }
 
     private void RefreshForNewDay()
