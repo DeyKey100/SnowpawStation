@@ -2,17 +2,21 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public enum FuelResult { Perfect, Accepted, Unhappy }
+public enum FuelResult { Underfilled, Accepted, Perfect, Overfilled }
 
 /// <summary>
 /// Рабочая смена: очередь заказов дня (2 обычные машины + сюжетные гости по расписанию),
-/// заправка у колонок (зажать ЛКМ, точность ±0.5/±2), цикл магазина
+/// заправка у колонок (зажать ЛКМ, пороги 75%, 91% и 110%), цикл магазина
 /// (товар с полки → на стойку → подтвердить), реакция клиента, квота, переход к вечеру.
 /// День 1 полностью: легковушка 35 л, микроавтобус 50 л, Дядя Котлета 80 л + двойной кофе.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class ServiceDirector : MonoBehaviour
 {
+    private const float MinimumAcceptedFuelRatio = 0.75f;
+    private const float GoodFuelRatio = 0.91f;
+    private const float OverfilledFuelRatio = 1.10f;
+
     public class Order
     {
         public string id;
@@ -35,6 +39,7 @@ public sealed class ServiceDirector : MonoBehaviour
     private int servedCount;
     private DialogueManager dialogue;
     private bool itemStageActive;
+    private bool fuelDeliveredForCurrentOrder;
     private Coroutine shiftStartRoutine;
 
     /// <summary>Товар, взятый с полки (в «лапах» до подтверждения на стойке).</summary>
@@ -181,6 +186,7 @@ public sealed class ServiceDirector : MonoBehaviour
     {
         CarriedGood = null;
         itemStageActive = false;
+        fuelDeliveredForCurrentOrder = false;
         CurrentOrder = queue.Count > 0 ? queue[0] : null;
 
         if (CurrentOrder != null)
@@ -210,11 +216,11 @@ public sealed class ServiceDirector : MonoBehaviour
 
     // ================= ЗАПРАВКА =================
 
-    /// <summary>Колонка отпустила liters л. Оцениваем точность и показываем реакцию.</summary>
+    /// <summary>Колонка отпустила liters л. Проверяем долю заказа и показываем реакцию.</summary>
     public void OnFuelDelivered(float liters)
     {
         Order order = CurrentOrder;
-        if (order == null || itemStageActive)
+        if (order == null || itemStageActive || fuelDeliveredForCurrentOrder)
         {
             return;
         }
@@ -234,6 +240,13 @@ public sealed class ServiceDirector : MonoBehaviour
             dialogue.Show(reaction);
         }
 
+        if (result == FuelResult.Underfilled)
+        {
+            Debug.Log($"[Snowpaw Station] Заправка не завершена: налито только {liters:0.0} л из {order.liters:0}. Нужно не менее {MinimumAcceptedFuelRatio:P0}. Заказ остаётся текущим.");
+            return;
+        }
+
+        fuelDeliveredForCurrentOrder = true;
         AdvanceClock();
 
         if (order.isGuest && !string.IsNullOrEmpty(order.item))
@@ -257,9 +270,10 @@ public sealed class ServiceDirector : MonoBehaviour
 
     private FuelResult Classify(float actual, float requested)
     {
-        float diff = Mathf.Abs(actual - requested);
-        if (diff <= 0.5f) return FuelResult.Perfect;
-        return diff <= 2f ? FuelResult.Accepted : FuelResult.Unhappy;
+        float ratio = actual / requested;
+        if (ratio < MinimumAcceptedFuelRatio) return FuelResult.Underfilled;
+        if (ratio < GoodFuelRatio) return FuelResult.Accepted;
+        return ratio < OverfilledFuelRatio ? FuelResult.Perfect : FuelResult.Overfilled;
     }
 
     private void AdvanceClock()

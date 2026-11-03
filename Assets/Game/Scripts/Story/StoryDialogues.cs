@@ -90,9 +90,10 @@ public static class StoryDialogues
     public static DialogueScript KotletaFuelReaction(FuelResult result)
     {
         DialogueScript s = DialogueBuilder.Create("kotleta_fuel");
-        s.Say("КОТЛЕТА", result == FuelResult.Perfect ? "«Ровно 80? Чудеса, да и только!»"
-            : result == FuelResult.Accepted ? "«Сойдёт»."
-            : "«Малой, у меня бак, а не озеро!».");
+        s.Say("КОТЛЕТА", result == FuelResult.Underfilled ? "«Маловато, малой. Давай заправляй заново»."
+            : result == FuelResult.Accepted ? "«Не полный бак, но сойдёт»."
+            : result == FuelResult.Perfect ? "«Вот теперь хорошо. Спасибо»."
+            : "«Малой, у меня бак, а не озеро. Следи лучше».");
         return s;
     }
 
@@ -122,16 +123,17 @@ public static class StoryDialogues
         s.Choose(
             DialogueBuilder.Option("«Тут заправка»", "«Да вижу! Какое отделение, тут сосна и колонка»", null, null),
             DialogueBuilder.Option("«Почты нет»", "«Нету? Вот тайга проклятая»", null, null));
-        s.Say("КУРЬЕР", "«Плесни тридцатку и пачку печенья дай. До города дтянуть».");
+        s.Say("КУРЬЕР", "«Плесни тридцатку и пачку печенья дай. До города дотянуть».");
         return s;
     }
 
     public static DialogueScript CourierFuelReaction(FuelResult result)
     {
         DialogueScript s = DialogueBuilder.Create("courier_fuel");
-        s.Say("КУРЬЕР", result == FuelResult.Perfect ? "«Пять звёзд, шеф. Где тут вообще звёзды ставят?»"
-            : result == FuelResult.Accepted ? "«Погнал»."
-            : "«Мне за этот литр никто не заплатит».");
+        s.Say("КУРЬЕР", result == FuelResult.Underfilled ? "«Маловато будет. Давай сначала, шеф»."
+            : result == FuelResult.Accepted ? "«Не полный бак, но доеду. Погнал»."
+            : result == FuelResult.Perfect ? "«Пять звёзд, шеф. Вот это заправка»."
+            : "«Шеф, у меня бак, а не озеро. Лишнего налил».");
         return s;
     }
 
@@ -166,9 +168,10 @@ public static class StoryDialogues
     public static DialogueScript DanilaFuelReaction(FuelResult result)
     {
         DialogueScript s = DialogueBuilder.Create("danila_fuel");
-        s.Say("ДАНИЛА", result == FuelResult.Perfect ? "«Чётко»."
-            : result == FuelResult.Accepted ? "«Пойдёт»."
-            : "«Братан, я двадцать просил».");
+        s.Say("ДАНИЛА", result == FuelResult.Underfilled ? "«Братан, маловато. Давай заново»."
+            : result == FuelResult.Accepted ? "«Не полный бак, но пойдёт»."
+            : result == FuelResult.Perfect ? "«Чётко. Вот так и надо»."
+            : "«Братан, я двадцать просил, а ты мне озеро залил».");
         return s;
     }
 
@@ -288,9 +291,10 @@ public static class StoryDialogues
         DialogueScript s = DialogueBuilder.Create("regular_result");
         switch (result)
         {
-            case FuelResult.Perfect: s.Say("", "«Идеально. Спасибо»."); break;
-            case FuelResult.Accepted: s.Say("", "«Принято. Поеду дальше»."); break;
-            default: s.Say("", "«Больше, чем заказывал... Ну ладно»."); break;
+            case FuelResult.Underfilled: s.Say("", "«Маловато. Давай начнём заправку заново»."); break;
+            case FuelResult.Accepted: s.Say("", "«Не полный бак, но нормально»."); break;
+            case FuelResult.Perfect: s.Say("", "«Хорошо заправили. Спасибо»."); break;
+            default: s.Say("", "«У меня бак, а не озеро. Следите за объёмом»."); break;
         }
         return s;
     }
