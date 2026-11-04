@@ -375,12 +375,21 @@ public sealed class ServiceDirector : MonoBehaviour
 
     // ================= КОЛОНКИ / МАГАЗИН В РАНТАЙМЕ =================
 
-    // Колонки стоят в ряд перед станцией: точные координаты сцены StationMain.
+    // Четыре колонки заправки: два острова по две колонки, координаты из меша gas_station.fbx.
+    // Сцена уже содержит объекты FuelPump_1..4; таблица — запасной вариант, если их нет.
     private static readonly Vector3[] FallbackPumpPositions =
     {
-        new Vector3(-6.1f, 1.4f, -1.8f),
-        new Vector3(0.9f, 1.4f, -1.8f),
+        new Vector3(-6.12f, PumpGroundY, -2.87f),
+        new Vector3(-6.12f, PumpGroundY, 2.97f),
+        new Vector3(0.91f, PumpGroundY, -2.87f),
+        new Vector3(0.91f, PumpGroundY, 2.97f),
     };
+
+    /// <summary>Верх снежного пола: на нём стоят колонки и остальные объекты двора.</summary>
+    private const float PumpGroundY = 0.5f;
+
+    /// <summary>Радиус, в котором у колонки появляется табличка «[E] ...».</summary>
+    private const float PumpPromptDistance = 2.2f;
 
     /// <summary>Колонки — только на улице (не в интерьере магазина).</summary>
     private void EnsurePumps(Scene scene)
@@ -390,29 +399,21 @@ public sealed class ServiceDirector : MonoBehaviour
             return;
         }
 
-        int layer = LayerMask.NameToLayer("Interactable");
-        if (layer < 0)
-        {
-            layer = 0;
-        }
-
         // Находим существующие колонки в активной сцене...
         List<GameObject> pumps = FindScenePumps();
         int created = 0;
-        for (int i = pumps.Count; i < 2; i++)
+        for (int i = pumps.Count; i < FallbackPumpPositions.Length; i++)
         {
-            GameObject pump = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            pump.name = "RuntimeFuelPump_" + (i + 1);
-            Vector3 pos = FallbackPumpPositions[i % FallbackPumpPositions.Length];
+            GameObject pump = new GameObject("FuelPump_" + (i + 1));
+            pump.transform.position = FallbackPumpPositions[i];
 
-            // Точные координаты сцены: цилиндр h≈1.8 на снежном полу (верх y≈0.5).
-            pos.y = 1.4f;
-
-            pump.transform.position = pos;
-            pump.transform.localScale = new Vector3(0.6f, 0.9f, 0.6f);
-            pump.layer = layer;
+            // Колонка — только точка взаимодействия: меш колонки уже есть в gas_station.fbx,
+            // поэтому своего коллайдера у неё нет (иначе луч прицела ловил бы пустышку).
+            pump.layer = 0;
             FuelPumpInteractable fuel = pump.AddComponent<FuelPumpInteractable>();
             fuel.Setup(i + 1);
+            ProximityInteractable proximity = pump.AddComponent<ProximityInteractable>();
+            proximity.Setup(PumpPromptDistance);
             runtimePumps.Add(pump);
             created++;
         }
@@ -425,6 +426,15 @@ public sealed class ServiceDirector : MonoBehaviour
                 fuel = pumps[i].AddComponent<FuelPumpInteractable>();
                 fuel.Setup(i + 1);
             }
+
+            // Колонки в сцене могли быть расставлены вручную: доводим до нужного вида.
+            ProximityInteractable proximity = pumps[i].GetComponent<ProximityInteractable>();
+            if (proximity == null)
+            {
+                proximity = pumps[i].AddComponent<ProximityInteractable>();
+            }
+
+            proximity.Setup(PumpPromptDistance);
         }
 
         if (created > 0)
@@ -447,10 +457,12 @@ public sealed class ServiceDirector : MonoBehaviour
             GameObject[] roots = scene.GetRootGameObjects();
             for (int i = 0; i < roots.Length; i++)
             {
+                // Колонки сцены — это FuelPump_1..4. Меш колонок внутри gas_station.fbx
+                // (stat_fuel_dispenser_mirror) по имени не матчится, поэтому лишних объектов не будет.
                 CollectByName(roots[i].transform, result, t =>
                 {
                     string n = t.name.ToLowerInvariant();
-                    return n.Contains("pump") || n.Contains("колонк") || n.Contains("fuel_pump");
+                    return n.StartsWith("fuelpump_") || n.Contains("колонк") || n.Contains("runtimefuelpump");
                 });
             }
         }

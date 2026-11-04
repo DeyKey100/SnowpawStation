@@ -286,33 +286,69 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: -9195664814420193456, guid: cffabd360b32d204399c473449a5c575, type: 3}
---- !u!1 &310266141 stripped
+--- !u!1 &294357295
 GameObject:
-  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: cffabd360b32d204399c473449a5c575, type: 3}
-  m_PrefabInstance: {fileID: 632781226}
-  m_PrefabAsset: {fileID: 0}
---- !u!64 &310266142
-MeshCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 310266141}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 294357296}
+  - component: {fileID: 294357298}
+  - component: {fileID: 294357297}
+  m_Layer: 0
+  m_Name: FuelPump_2
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &294357296
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 294357295}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -1.1199999, y: 0, z: 2.97}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 632781227}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &294357297
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 294357295}
   m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 0
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 0}
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd8264e62404e684bafc281b8e268a4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  promptText: 
+  plateWorldOffsetY: 1.9
+  playerTag: Player
+  activateDistance: 2.2
+  maxVerticalDifference: 3
+--- !u!114 &294357298
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 294357295}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9703b2d3c77ac924ababc349613b4c75, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  pumpIndex: 2
 --- !u!43 &329493611
 Mesh:
   m_ObjectHideFlags: 0
@@ -1006,18 +1042,62 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: cffabd360b32d204399c473449a5c575, type: 3}
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: cffabd360b32d204399c473449a5c575, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 310266142}
+      addedObject: {fileID: 2047859658}
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: cffabd360b32d204399c473449a5c575, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 294357296}
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: cffabd360b32d204399c473449a5c575, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1840097448}
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: cffabd360b32d204399c473449a5c575, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1968177550}
+    m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: -6768046723230340336, guid: cffabd360b32d204399c473449a5c575, type: 3}
       insertIndex: -1
       addedObject: {fileID: 204499521}
+    - targetCorrespondingSourceObject: {fileID: -7895960806692541773, guid: cffabd360b32d204399c473449a5c575, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 632781229}
     - targetCorrespondingSourceObject: {fileID: -7101037248628183712, guid: cffabd360b32d204399c473449a5c575, type: 3}
       insertIndex: -1
       addedObject: {fileID: 141745707}
   m_SourcePrefab: {fileID: 100100000, guid: cffabd360b32d204399c473449a5c575, type: 3}
+--- !u!4 &632781227 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: cffabd360b32d204399c473449a5c575, type: 3}
+  m_PrefabInstance: {fileID: 632781226}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &632781228 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: -7895960806692541773, guid: cffabd360b32d204399c473449a5c575, type: 3}
+  m_PrefabInstance: {fileID: 632781226}
+  m_PrefabAsset: {fileID: 0}
+--- !u!64 &632781229
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 632781228}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 0
+  m_CookingOptions: 30
+  m_Mesh: {fileID: -7335086194383108179, guid: cffabd360b32d204399c473449a5c575, type: 3}
 --- !u!1 &647234836
 GameObject:
   m_ObjectHideFlags: 0
@@ -2102,6 +2182,132 @@ Camera:
   m_CorrespondingSourceObject: {fileID: 9005220659476430821, guid: 2d3a85ecde41a8246a79669975912b74, type: 3}
   m_PrefabInstance: {fileID: 1572513107}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1840097447
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1840097448}
+  - component: {fileID: 1840097450}
+  - component: {fileID: 1840097449}
+  m_Layer: 0
+  m_Name: FuelPump_3
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1840097448
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1840097447}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 5.91, y: 0, z: -2.87}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 632781227}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1840097449
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1840097447}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd8264e62404e684bafc281b8e268a4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  promptText: 
+  plateWorldOffsetY: 1.9
+  playerTag: Player
+  activateDistance: 2.2
+  maxVerticalDifference: 3
+--- !u!114 &1840097450
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1840097447}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9703b2d3c77ac924ababc349613b4c75, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  pumpIndex: 3
+--- !u!1 &1968177549
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1968177550}
+  - component: {fileID: 1968177552}
+  - component: {fileID: 1968177551}
+  m_Layer: 0
+  m_Name: FuelPump_4
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1968177550
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1968177549}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 5.91, y: 0, z: 2.97}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 632781227}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1968177551
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1968177549}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd8264e62404e684bafc281b8e268a4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  promptText: 
+  plateWorldOffsetY: 1.9
+  playerTag: Player
+  activateDistance: 2.2
+  maxVerticalDifference: 3
+--- !u!114 &1968177552
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1968177549}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9703b2d3c77ac924ababc349613b4c75, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  pumpIndex: 4
 --- !u!1 &2002159138
 GameObject:
   m_ObjectHideFlags: 0
@@ -2156,6 +2362,69 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2047859657
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2047859658}
+  - component: {fileID: 2047859660}
+  - component: {fileID: 2047859659}
+  m_Layer: 0
+  m_Name: FuelPump_1
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2047859658
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2047859657}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -1.1199999, y: 0, z: -2.87}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 632781227}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2047859659
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2047859657}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd8264e62404e684bafc281b8e268a4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  promptText: 
+  plateWorldOffsetY: 1.9
+  playerTag: Player
+  activateDistance: 2.2
+  maxVerticalDifference: 3
+--- !u!114 &2047859660
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2047859657}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9703b2d3c77ac924ababc349613b4c75, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  pumpIndex: 1
 --- !u!1001 &2487761743079760340
 PrefabInstance:
   m_ObjectHideFlags: 0

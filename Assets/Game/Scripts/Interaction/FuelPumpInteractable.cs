@@ -20,10 +20,13 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
     private bool armed;
     private float armedTimer;
 
-    public int PumpIndex { get; private set; }
+    // Номер колонки хранится в сцене: иначе после загрузки сцены он сбрасывался бы в 0.
+    [SerializeField] private int pumpIndex = 1;
+
+    public int PumpIndex => pumpIndex;
     public bool IsFueling => fueling;
 
-    public void Setup(int pumpIndex) => PumpIndex = pumpIndex;
+    public void Setup(int index) => pumpIndex = index;
 
     private void Awake()
     {
