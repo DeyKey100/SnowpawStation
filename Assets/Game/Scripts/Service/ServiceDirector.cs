@@ -41,6 +41,7 @@ public sealed class ServiceDirector : MonoBehaviour
     private bool itemStageActive;
     private bool fuelDeliveredForCurrentOrder;
     private Coroutine shiftStartRoutine;
+    private TruckArrivalController truckArrival;
 
     /// <summary>Товар, взятый с полки (в «лапах» до подтверждения на стойке).</summary>
     public string CarriedGood { get; private set; }
@@ -63,6 +64,7 @@ public sealed class ServiceDirector : MonoBehaviour
         }
 
         SceneManager.sceneLoaded += OnSceneLoaded;
+        truckArrival = gameObject.AddComponent<TruckArrivalController>();
         EnsurePumps(SceneManager.GetActiveScene());
         EnsureShop(SceneManager.GetActiveScene());
     }
@@ -193,8 +195,35 @@ public sealed class ServiceDirector : MonoBehaviour
         {
             Debug.Log($"[Snowpaw Station] Заказ: {CurrentOrder.displayName} — {CurrentOrder.liters:0} л{(CurrentOrder.item != null ? $", {Goods.DisplayName(CurrentOrder.item)}" : "")}.");
             OrderChanged?.Invoke(CurrentOrder);
-            ShowGreeting(CurrentOrder);
+            if (!StartFirstTruckArrival(CurrentOrder))
+            {
+                ShowGreeting(CurrentOrder);
+            }
         }
+    }
+
+    private bool StartFirstTruckArrival(Order order)
+    {
+        const string eventId = "first_order_truck_arrival";
+        if (GameState.IsDayEventDone(eventId))
+        {
+            return false;
+        }
+
+        Transform pump = FindPump(order.pumpIndex);
+        if (pump == null)
+        {
+            Debug.LogError($"[Snowpaw Station] Не найдена колонка №{order.pumpIndex + 1} для подъезда трака.");
+            return false;
+        }
+
+        if (truckArrival.BeginDelayed(pump, 3.5f, () => ShowGreeting(order)))
+        {
+            GameState.MarkDayEventOnce(eventId);
+            return true;
+        }
+
+        return false;
     }
 
     private void ShowGreeting(Order order)
@@ -365,6 +394,10 @@ public sealed class ServiceDirector : MonoBehaviour
 
         if (DayLoopManager.Instance.CurrentState == DayLoopManager.DayState.WorkShift)
         {
+            if (truckArrival != null && truckArrival.IsActive)
+            {
+                truckArrival.Depart();
+            }
             NextOrder();
         }
     }
@@ -456,6 +489,19 @@ public sealed class ServiceDirector : MonoBehaviour
         }
 
         return result;
+    }
+
+    private static Transform FindPump(int pumpIndex)
+    {
+        List<GameObject> pumps = FindScenePumps();
+        if (pumpIndex >= 0 && pumpIndex < pumps.Count)
+        {
+            return pumps[pumpIndex].transform;
+        }
+
+        string expectedName = "RuntimeFuelPump_" + (pumpIndex + 1);
+        GameObject namedPump = GameObject.Find(expectedName);
+        return namedPump != null ? namedPump.transform : null;
     }
 
     private static GameObject FindStationAnchor()

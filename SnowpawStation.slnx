@@ -41,6 +41,7 @@
   <Project Path="Unity.VisualScripting.Core.csproj" />
   <Project Path="Unity.RenderPipelines.Universal.Runtime.csproj" />
   <Project Path="Unity.InferenceEngine.Editor.csproj" />
+  <Project Path="Unity.AI.Navigation.Editor.ConversionSystem.csproj" />
   <Project Path="Unity.VisualScripting.State.Editor.csproj" />
   <Project Path="Unity.Burst.CodeGen.csproj" />
   <Project Path="Unity.Cinemachine.csproj" />
@@ -57,13 +58,16 @@
   <Project Path="Extensions.Unity.PlayerPrefsEx.csproj" />
   <Project Path="Unity.Rider.Editor.csproj" />
   <Project Path="Unity.VisualScripting.State.csproj" />
+  <Project Path="Unity.AI.Navigation.Updater.csproj" />
   <Project Path="UnityEditor.UI.csproj" />
   <Project Path="Unity.PlasticSCM.Editor.Assistant.csproj" />
+  <Project Path="Unity.AI.Navigation.Editor.csproj" />
   <Project Path="Unity.AppUI.MVVM.csproj" />
   <Project Path="Unity.Cloud.AppLinking.Embedded.csproj" />
   <Project Path="Unity.Multiplayer.Center.Common.csproj" />
   <Project Path="Unity.AppUI.Navigation.csproj" />
   <Project Path="Unity.Cloud.Common.Runtime.Embedded.csproj" />
+  <Project Path="Unity.AI.Navigation.csproj" />
   <Project Path="Unity.Cloud.AppLinking.Runtime.Embedded.csproj" />
   <Project Path="Unity.Collections.CodeGen.csproj" />
   <Project Path="Unity.Mathematics.Editor.csproj" />
