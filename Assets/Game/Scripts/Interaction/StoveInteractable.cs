@@ -78,10 +78,22 @@ public class StoveInteractable : MonoBehaviour, IInteractable
             return string.Empty;
         }
 
+        // Записка — первая задача утра: до неё печь не предлагает взаимодействие вовсе.
+        if (!IsUnlocked())
+        {
+            return string.Empty;
+        }
+
         // Подсказка должна появляться при наведении всегда, иначе печь выглядит неинтерактивной.
         return wood.HasFirewood
             ? "[E] Подбросить полено в печь"
             : "Нужны дрова - возьмите у поленницы";
+    }
+
+    private static bool IsUnlocked()
+    {
+        DayLoopManager loop = DayLoopManager.Instance;
+        return loop == null || loop.IsMorningTaskUnlocked("stove_lit");
     }
 
     public void Interact()
@@ -103,6 +115,13 @@ public class StoveInteractable : MonoBehaviour, IInteractable
 
         if (!wood.TryConsumeFirewood())
         {
+            return;
+        }
+
+        if (!IsUnlocked())
+        {
+            // Дрова вернули: топить печь до записки рано.
+            wood.TryAddFirewood();
             return;
         }
 

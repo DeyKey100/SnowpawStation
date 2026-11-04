@@ -24,6 +24,10 @@ public sealed class KotovVisit : MonoBehaviour
     private int visitDay;
     private GameObject doorstepLetter;
 
+    /// <summary>Вечер наступил в интерьере: визит ждёт, пока игрок выйдет на улицу.</summary>
+    private int pendingVisitDay;
+    private string lastSceneName = string.Empty;
+
     private void Start()
     {
         dialogue = StoryDirector.Instance != null ? StoryDirector.Instance.Dialogue : null;
@@ -45,6 +49,7 @@ public sealed class KotovVisit : MonoBehaviour
         State = VisitState.Waiting;
         broken = false;
         lookedAwayTimer = 0f;
+        pendingVisitDay = 0;
     }
 
     private void OnAnyDialogueFinished(DialogueScript finished)
@@ -66,14 +71,34 @@ public sealed class KotovVisit : MonoBehaviour
 
     private void OnPhaseChanged(int day, DayLoopManager.DayState state)
     {
-        if (state == DayLoopManager.DayState.Evening && State == VisitState.Waiting)
+        if (state != DayLoopManager.DayState.Evening || State != VisitState.Waiting)
+        {
+            return;
+        }
+
+        // Вечер наступает и в магазине: почтальон не может стучать в дверь,
+        // пока игрок внутри, поэтому откладываем визит до выхода на улицу.
+        pendingVisitDay = day;
+        if (IsPlayerOutdoors)
         {
             BeginVisit(day);
         }
     }
 
+    /// <summary>Игрок на улице (не в интерьере заправки).</summary>
+    private static bool IsPlayerOutdoors
+    {
+        get
+        {
+            UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            string name = scene.IsValid() ? scene.name.ToLowerInvariant() : string.Empty;
+            return !name.Contains("interior");
+        }
+    }
+
     private void BeginVisit(int day)
     {
+        pendingVisitDay = 0;
         visitDay = day;
         State = VisitState.InProgress;
         lookedAwayTimer = 0f;
@@ -142,6 +167,8 @@ public sealed class KotovVisit : MonoBehaviour
 
     private void Update()
     {
+        TryStartPendingVisit();
+
         // Следим за взглядом только пока идёт СВОЙ диалог: иначе «отвести взгляд»
         // обрывало чужую реплику (котлета_farewell), а визит при этом терялся.
         if (State != VisitState.InProgress || !IsKotovScriptActive)
@@ -150,6 +177,48 @@ public sealed class KotovVisit : MonoBehaviour
         }
 
         TrackGaze();
+    }
+
+    /// <summary>
+    /// Отложенный визит: вечер пришёл, пока игрок был в магазине — стучим,
+    /// как только он снова оказался на улице.
+    /// </summary>
+    private void TryStartPendingVisit()
+    {
+        if (pendingVisitDay <= 0 || State != VisitState.Waiting)
+        {
+            return;
+        }
+
+        if (!IsPlayerOutdoors)
+        {
+            return;
+        }
+
+        if (OutsideSceneJustLoaded())
+        {
+            return;
+        }
+
+        int day = pendingVisitDay;
+        pendingVisitDay = 0;
+        BeginVisit(day);
+    }
+
+    /// <summary>
+    /// Первый кадр после загрузки сцены: игрока ещё не перенесли к точке выхода,
+    /// поэтому визит ждём один кадр (иначе Котов ищет дверь в ещё не собранной сцене).
+    /// </summary>
+    private bool OutsideSceneJustLoaded()
+    {
+        string current = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        if (current == lastSceneName)
+        {
+            return false;
+        }
+
+        lastSceneName = current;
+        return true;
     }
 
     private bool IsKotovScriptActive
@@ -248,6 +317,7 @@ public sealed class KotovVisit : MonoBehaviour
 
         var pickup = letter.AddComponent<DoorstepLetterInteractable>();
         pickup.Setup(visitDay);
+        ProximityInteractable.EnsureOn(letter, 2.4f);
         doorstepLetter = letter;
     }
 

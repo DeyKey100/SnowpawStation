@@ -4,14 +4,13 @@ using UnityEngine;
 /// <summary>
 /// Эффекты холода: при тепле станции ниже 25% Рыжиков замедляется (×0.6 скорости)
 /// и по краям экрана проступает иней. Холод не убивает — только неудобство.
-/// Скорость правится через FirstPersonController.MoveSpeed/SprintSpeed.
+/// Скорость правится через FirstPersonController.MoveSpeed (бега в игре нет).
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class PlayerColdEffects : MonoBehaviour
 {
     private const float SlowFactor = 0.6f;
     private const float OriginalMoveSpeed = 4f;
-    private const float OriginalSprintSpeed = 6f;
 
     private FirstPersonController player;
     private bool applied;
@@ -31,7 +30,6 @@ public sealed class PlayerColdEffects : MonoBehaviour
         {
             applied = cold;
             player.MoveSpeed = cold ? OriginalMoveSpeed * SlowFactor : OriginalMoveSpeed;
-            player.SprintSpeed = cold ? OriginalSprintSpeed * SlowFactor : OriginalSprintSpeed;
             Debug.Log(cold
                 ? "[Snowpaw Station] Холод: скорость ×0.6, иней по краям экрана."
                 : "[Snowpaw Station] Тепло вернулось: скорость в норме.");
@@ -73,7 +71,6 @@ public sealed class PlayerColdEffects : MonoBehaviour
         if (player != null)
         {
             player.MoveSpeed = OriginalMoveSpeed;
-            player.SprintSpeed = OriginalSprintSpeed;
         }
 
         if (frost != null)
