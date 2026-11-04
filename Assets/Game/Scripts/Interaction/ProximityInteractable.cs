@@ -23,6 +23,9 @@ public class ProximityInteractable : MonoBehaviour
     [Header("Proximity")]
     [SerializeField] private float activateDistance = 2.2f;
     [SerializeField] private float maxVerticalDifference = 3f;
+    [Tooltip("Больше — важнее. При равной близости выигрывает маркер с высоким приоритетом:\n" +
+             "так записка на столе перебивает стойку и полку, рядом с которыми лежит.")]
+    [SerializeField] private int priority;
 
     private IInteractable interactable;
     private Collider[] cachedColliders;
@@ -47,6 +50,14 @@ public class ProximityInteractable : MonoBehaviour
 
     public float ActivateDistance => activateDistance;
 
+    /// <summary>Вес маркера при выборе ближайшего: больше — важнее (записка важнее стойки).</summary>
+    public int Priority => priority;
+
+    public void SetPriority(int value)
+    {
+        priority = value;
+    }
+
     public void Setup(float distance)
     {
         activateDistance = distance;
@@ -58,7 +69,7 @@ public class ProximityInteractable : MonoBehaviour
     }
 
     /// <summary>Гарантирует маркер на объекте (нужно для объектов, созданных в рантайме).</summary>
-    public static ProximityInteractable EnsureOn(GameObject target, float distance = 2.2f)
+    public static ProximityInteractable EnsureOn(GameObject target, float distance = 2.2f, int priority = 0)
     {
         if (target == null)
         {
@@ -72,6 +83,7 @@ public class ProximityInteractable : MonoBehaviour
         }
 
         marker.Setup(distance);
+        marker.SetPriority(priority);
         return marker;
     }
 

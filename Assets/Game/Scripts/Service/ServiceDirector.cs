@@ -30,6 +30,18 @@ public sealed class ServiceDirector : MonoBehaviour
     /// <summary>Текущий заказ смены; null — смена не идёт.</summary>
     public Order CurrentOrder { get; private set; }
 
+    /// <summary>
+    /// Номер колонки (1..4), к которой встал текущий посетитель; 0 — никого нет.
+    /// Плашка «[E] Заправить» показывается только у этой колонки: остальные стоят
+    /// пустые, и подходить к ним незачем.
+    /// </summary>
+    public int OrderPumpNumber => CurrentOrder != null && !fuelDeliveredForCurrentOrder && !itemStageActive
+        ? CurrentOrder.pumpIndex + 1
+        : 0;
+
+    /// <summary>Заказ ещё можно заправлять: заказ есть и топливо по нему не выдано.</summary>
+    public bool CanRefuel => CurrentOrder != null && !fuelDeliveredForCurrentOrder && !itemStageActive;
+
     /// <summary>Часы: каждая обслуженная машина сдвигает время, таймера нет.</summary>
     public string Clock => CurrentState == "morning" ? "08:00" : CurrentState == "evening" ? "18:00" : clockText;
 
@@ -47,6 +59,9 @@ public sealed class ServiceDirector : MonoBehaviour
 
     private readonly List<GameObject> runtimePumps = new List<GameObject>();
     private readonly List<GameObject> runtimeShop = new List<GameObject>();
+
+    /// <summary>Заглушка машины текущего посетителя (вытянутый куб у его колонки).</summary>
+    private VisitorCarPlaceholder visitorCar;
 
     public static ServiceDirector Instance { get; private set; }
 
@@ -70,6 +85,7 @@ public sealed class ServiceDirector : MonoBehaviour
     private void OnDestroy()
     {
         Instance = null;
+        DespawnVisitorCar();
         if (DayLoopManager.Instance != null)
         {
             DayLoopManager.Instance.PhaseChanged -= OnPhaseChanged;
@@ -85,6 +101,17 @@ public sealed class ServiceDirector : MonoBehaviour
     {
         EnsurePumps(scene);
         EnsureShop(scene);
+
+        // Машина живёт в сцене двора: после похода в магазин за товаром (Котлета просит кофе)
+        // она уничтожается вместе со сценой, а заказ ещё активен — ставим её обратно к колонке.
+        if (CurrentOrder != null && !scene.name.ToLowerInvariant().Contains("interior"))
+        {
+            GameObject existing = GameObject.Find("VisitorCar");
+            if (existing == null)
+            {
+                SpawnVisitorCar(CurrentOrder);
+            }
+        }
     }
 
     private void OnPhaseChanged(int day, DayLoopManager.DayState state)
@@ -109,12 +136,14 @@ public sealed class ServiceDirector : MonoBehaviour
             CurrentState = "evening";
             CurrentOrder = null;
             CarriedGood = null;
+            DespawnVisitorCar();
             OrderChanged?.Invoke(null);
         }
         else if (state == DayLoopManager.DayState.Morning)
         {
             CurrentState = "morning";
             CurrentOrder = null;
+            DespawnVisitorCar();
             OrderChanged?.Invoke(null);
         }
     }
@@ -132,9 +161,39 @@ public sealed class ServiceDirector : MonoBehaviour
 
         yield return new WaitForSeconds(0.8f);
 
+        // Первый посетитель приезжает только на улице и только после записки:
+        // если игрок ещё в магазине, машина подъедет, как только он выйдет.
+        while (CurrentState == "shift" && !CanVisitorArrive)
+        {
+            yield return null;
+        }
+
         if (CurrentState == "shift" && CurrentOrder == null)
         {
             NextOrder();
+        }
+    }
+
+    /// <summary>
+    /// Посетитель может приехать: смена идёт, записка прочитана и игрок на улице.
+    /// В интерьере машины нет — она стоит во дворе, которого в этой сцене не существует.
+    /// </summary>
+    private bool CanVisitorArrive
+    {
+        get
+        {
+            if (DayLoopManager.Instance == null ||
+                DayLoopManager.Instance.CurrentState != DayLoopManager.DayState.WorkShift)
+            {
+                return false;
+            }
+
+            if (!GameState.IsDayEventDone(KeeperNoteInteractable.ReadEventId))
+            {
+                return false;
+            }
+
+            return !SceneManager.GetActiveScene().name.ToLowerInvariant().Contains("interior");
         }
     }
 
@@ -192,9 +251,68 @@ public sealed class ServiceDirector : MonoBehaviour
         if (CurrentOrder != null)
         {
             Debug.Log($"[Snowpaw Station] Заказ: {CurrentOrder.displayName} — {CurrentOrder.liters:0} л{(CurrentOrder.item != null ? $", {Goods.DisplayName(CurrentOrder.item)}" : "")}.");
+            SpawnVisitorCar(CurrentOrder);
             OrderChanged?.Invoke(CurrentOrder);
             ShowGreeting(CurrentOrder);
         }
+        else
+        {
+            DespawnVisitorCar();
+        }
+    }
+
+    // ================= ЗАГЛУШКА МАШИНЫ =================
+
+    /// <summary>Поставить вытянутый куб у колонки, к которой встал посетитель.</summary>
+    private void SpawnVisitorCar(Order order)
+    {
+        DespawnVisitorCar();
+
+        int pumpNumber = order.pumpIndex + 1;
+        if (!TryGetPumpPosition(pumpNumber, out Vector3 pumpPosition))
+        {
+            return;
+        }
+
+        // Машина встаёт с внешней стороны островка: у левых колонок — налево по X,
+        // у правых — направо, иначе она оказалась бы между колонками.
+        float side = pumpPosition.x < 0f ? -1f : 1f;
+        visitorCar = VisitorCarPlaceholder.Spawn(pumpPosition, side);
+    }
+
+    private void DespawnVisitorCar()
+    {
+        if (visitorCar != null)
+        {
+            Destroy(visitorCar.gameObject);
+            visitorCar = null;
+        }
+    }
+
+    /// <summary>Позиция колонки по её номеру (1..4): из сцены, иначе из таблицы.</summary>
+    private bool TryGetPumpPosition(int pumpNumber, out Vector3 position)
+    {
+        int index = pumpNumber - 1;
+        if (index < 0 || index >= FallbackPumpPositions.Length)
+        {
+            position = Vector3.zero;
+            return false;
+        }
+
+        List<GameObject> pumps = FindScenePumps();
+        pumps.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+        for (int i = 0; i < pumps.Count; i++)
+        {
+            FuelPumpInteractable fuel = pumps[i].GetComponent<FuelPumpInteractable>();
+            if (fuel != null && fuel.PumpIndex == pumpNumber)
+            {
+                position = pumps[i].transform.position;
+                return true;
+            }
+        }
+
+        position = FallbackPumpPositions[index];
+        return true;
     }
 
     private void ShowGreeting(Order order)
@@ -249,7 +367,15 @@ public sealed class ServiceDirector : MonoBehaviour
         fuelDeliveredForCurrentOrder = true;
         AdvanceClock();
 
-        if (order.isGuest && !string.IsNullOrEmpty(order.item))
+        // Клиент, который просит ещё и товар (Дядя Котлета — кофе), остаётся у колонки:
+        // машина уезжает только после выдачи товара, в CompleteOrder.
+        bool awaitsItem = order.isGuest && !string.IsNullOrEmpty(order.item);
+        if (!awaitsItem)
+        {
+            DespawnVisitorCar();
+        }
+
+        if (awaitsItem)
         {
             itemStageActive = true;
             Debug.Log($"[Snowpaw Station] Ждём товар: {Goods.DisplayName(order.item)} (полка → стойка → подтвердить).");
@@ -353,6 +479,9 @@ public sealed class ServiceDirector : MonoBehaviour
         {
             queue.RemoveAt(0);
         }
+
+        // Заглушка машины не должна переживать свой заказ.
+        DespawnVisitorCar();
 
         if (done.isGuest)
         {

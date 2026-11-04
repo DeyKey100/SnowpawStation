@@ -117,6 +117,10 @@ namespace StarterAssets
 
 		private void Update()
 		{
+			// Заправка (и другие сценки) замораживают персонажа на месте: игрок стоит
+			// у колонки, пока идёт отпуск топлива, и не может уйти или отъехать камерой.
+			// Сам ввод не трогаем — его пишет PlayerInput каждый кадр; заморозка живёт
+			// внутри Move() и LateUpdate(), иначе два источника правды спорили бы за _input.
 			ApplyGravity();
 			GroundedCheck();
 			Move();
@@ -124,6 +128,11 @@ namespace StarterAssets
 
 		private void LateUpdate()
 		{
+			if (PlayerControlLock.IsLocked)
+			{
+				return;
+			}
+
 			CameraRotation();
 		}
 
@@ -247,17 +256,22 @@ namespace StarterAssets
 			// Бега и ускорения нет: единственная скорость — MoveSpeed, Shift игнорируется.
 			float targetSpeed = MoveSpeed;
 
+			// Заморозка на время заправки: вход игнорируется, персонаж гасит скорость
+			// и остаётся стоять там, где начал заправку.
+			bool frozen = PlayerControlLock.IsLocked;
+			Vector2 moveInput = frozen ? Vector2.zero : _input.move;
+
 			// a simplistic acceleration and deceleration designed to be easy to remove, replace, or iterate upon
 
 			// note: Vector2's == operator uses approximation so is not floating point error prone, and is cheaper than magnitude
 			// if there is no input, set the target speed to 0
-			if (_input.move == Vector2.zero) targetSpeed = 0.0f;
+			if (moveInput == Vector2.zero) targetSpeed = 0.0f;
 
 			// a reference to the players current horizontal velocity
 			float currentHorizontalSpeed = new Vector3(_controller.velocity.x, 0.0f, _controller.velocity.z).magnitude;
 
 			float speedOffset = 0.1f;
-			float inputMagnitude = _input.analogMovement ? _input.move.magnitude : 1f;
+			float inputMagnitude = _input.analogMovement ? moveInput.magnitude : 1f;
 
 			// accelerate or decelerate to target speed
 			if (currentHorizontalSpeed < targetSpeed - speedOffset || currentHorizontalSpeed > targetSpeed + speedOffset)
@@ -275,14 +289,14 @@ namespace StarterAssets
 			}
 
 			// normalise input direction
-			Vector3 inputDirection = new Vector3(_input.move.x, 0.0f, _input.move.y).normalized;
+			Vector3 inputDirection = new Vector3(moveInput.x, 0.0f, moveInput.y).normalized;
 
 			// note: Vector2's != operator uses approximation so is not floating point error prone, and is cheaper than magnitude
 			// if there is a move input rotate player when the player is moving
-			if (_input.move != Vector2.zero)
+			if (moveInput != Vector2.zero)
 			{
 				// move
-				inputDirection = transform.right * _input.move.x + transform.forward * _input.move.y;
+				inputDirection = transform.right * moveInput.x + transform.forward * moveInput.y;
 			}
 
 			// move the player

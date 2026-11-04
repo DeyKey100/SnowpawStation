@@ -19,6 +19,9 @@ public class PlayerInteraction : MonoBehaviour
 
     private static readonly List<ProximityInteractable> markers = new List<ProximityInteractable>();
 
+    /// <summary>Сколько метров близости «стоит» одна единица приоритета маркера.</summary>
+    private const float PriorityMeters = 0.5f;
+
     private Transform playerTransform;
     private Camera viewCamera;
     private ProximityInteractable focused;
@@ -131,6 +134,7 @@ public class PlayerInteraction : MonoBehaviour
     private static ProximityInteractable FindNearest(Vector3 playerPosition, out float nearestDistance)
     {
         ProximityInteractable nearest = null;
+        float bestScore = float.MaxValue;
         nearestDistance = float.MaxValue;
 
         for (int i = 0; i < markers.Count; i++)
@@ -144,7 +148,7 @@ public class PlayerInteraction : MonoBehaviour
             bool inRange = marker.TryGetRange(playerPosition, out float distance);
             marker.PlayerInRange = inRange;
 
-            if (!inRange || distance >= nearestDistance)
+            if (!inRange)
             {
                 continue;
             }
@@ -154,6 +158,16 @@ public class PlayerInteraction : MonoBehaviour
                 continue;
             }
 
+            // Приоритет перевешивает близость: записка лежит на столе рядом со стойкой,
+            // и без него подсказку кассы получал бы тот, кто стоит дальше от записки.
+            float score = distance - marker.Priority * PriorityMeters;
+
+            if (score >= bestScore)
+            {
+                continue;
+            }
+
+            bestScore = score;
             nearest = marker;
             nearestDistance = distance;
         }

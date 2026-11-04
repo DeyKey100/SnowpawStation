@@ -35,8 +35,11 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
         string name = scene.name.ToLowerInvariant();
         bool interior = name.Contains("interior");
 
-        // Записка нужна в любой сцене: без неё не закрывается утро дня 1.
-        SpawnNote(scene, interior);
+        // Записка лежит только в доме: на улице её нет, пока игрок не зайдёт внутрь.
+        if (interior)
+        {
+            SpawnNote(scene);
+        }
 
         if (!interior && DayLoopManager.Instance != null && DayLoopManager.Instance.CurrentDay >= 3)
         {
@@ -44,7 +47,7 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
         }
     }
 
-    private void SpawnNote(Scene scene, bool interior)
+    private void SpawnNote(Scene scene)
     {
         // Записку читают один раз за прохождение: после перезагрузки сцены (магазин → улица)
         // она не должна появляться снова.
@@ -58,40 +61,16 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
             return;
         }
 
-        Transform stove = interior ? null : FindInScene(scene, "stove");
-        Transform door = FindInScene(scene, "door");
-
-        Vector3 pos;
-        if (interior)
-        {
-            pos = new Vector3(-0.6f, 1.12f, 0.4f); // у стойки, «под кружкой»
-        }
-        else if (door != null)
-        {
-            // Перед дверью, но не на пороге: иначе плашка записки перебивает «Войти»
-            // (взаимодействия теперь по расстоянию, а не по прицелу).
-            Transform player = FindInScene(scene, "playercapsule");
-            Vector3 dir = player != null ? player.position - door.position : Vector3.back;
-            dir.y = 0f;
-            dir = dir.sqrMagnitude > 0.01f ? dir.normalized : Vector3.back;
-            pos = door.position + dir * 2.8f;
-            // Снежный пол — куб с верхней гранью на y≈0.5: ниже записка утонула бы в нём.
-            pos.y = door.position.y + 0.06f;
-        }
-        else if (stove != null)
-        {
-            pos = new Vector3(stove.position.x + 0.75f, 0.35f, stove.position.z + 0.55f);
-        }
-        else
-        {
-            pos = new Vector3(-1.3f, 0.35f, -7.4f);
-        }
+        // Записка лежит на столе (стойке с кассой) внутри дома: на улице её нет,
+        // пока игрок не зайдёт внутрь. Стойка тоже интерактивна, поэтому записке выдан
+        // приоритет: иначе подсказку кассы получал бы тот, кто ближе к стойке, а не к записке.
+        Vector3 pos = new Vector3(-0.62f, 1.09f, 0.05f); // на столе, чуть в стороне от кассы
 
         note = GameObject.CreatePrimitive(PrimitiveType.Cube);
         note.name = "KeeperNote";
         note.transform.position = pos;
         note.transform.localScale = new Vector3(0.34f, 0.03f, 0.46f);
-        note.transform.rotation = Quaternion.Euler(0f, interior ? 0f : 35f, 0f);
+        note.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
         ApplyInteractableLayer(note);
 
         Renderer renderer = note.GetComponent<Renderer>();
@@ -103,7 +82,8 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
         }
 
         note.AddComponent<KeeperNoteInteractable>();
-        ProximityInteractable.EnsureOn(note);
+        // Приоритет 4 = «важнее всего на столе»: записка выигрывает у стойки и полки.
+        ProximityInteractable.EnsureOn(note, 2.2f, 4);
         Debug.Log($"[Snowpaw Station] Записка смотрителя: {pos}.");
     }
 
@@ -210,6 +190,9 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
         direction = 1f;
         speed = 1.4f;
         InteractionLock.Add("chopping");
+
+        // Пока идёт колка — персонаж и камера стоят: игрок рубит, а не ходит вокруг колоды.
+        PlayerControlLock.Add("chopping");
         StartCoroutine(Run(onSuccess));
  }
 
@@ -221,10 +204,19 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
         }
 
         InteractionLock.Remove("chopping");
+        PlayerControlLock.Remove("chopping");
         if (success)
         {
             onSuccess?.Invoke();
         }
+    }
+
+    /// <summary>Колоду выгрузили/выключили посреди колки — иначе игрок остался бы замороженным.</summary>
+    private void OnDisable()
+    {
+        active = false;
+        InteractionLock.Remove("chopping");
+        PlayerControlLock.Remove("chopping");
     }
 
     private void Update()

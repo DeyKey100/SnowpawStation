@@ -212,7 +212,26 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
             return string.Empty;
         }
 
+        // Записка — первая задача утра: пока её не прочли, сугроб не предлагает взаимодействие.
+        if (!IsUnlocked())
+        {
+            return string.Empty;
+        }
+
         return "[E] Расчистить сугроб";
+    }
+
+    /// <summary>Записка — первая задача утра: пока её не прочли, сугробы не считаются.</summary>
+    private bool IsUnlocked()
+    {
+        if (dayLoopManager == null)
+        {
+            return true;
+        }
+
+        string id = ResolveTaskId();
+        // Сугроба нет в плане дня (лишний сугроб) — записка ему не указ.
+        return string.IsNullOrEmpty(id) || dayLoopManager.IsMorningTaskUnlocked(id);
     }
 
     public void Interact()
@@ -233,6 +252,12 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
         if (!CanClearDuringCurrentPhase())
         {
             Debug.Log("Сейчас сугроб нельзя расчищать: дождитесь утренней фазы.", this);
+            return;
+        }
+
+        if (!IsUnlocked())
+        {
+            Debug.Log("[Snowpaw Station] Сугроб пока не считается: сначала записка в доме.", this);
             return;
         }
 
