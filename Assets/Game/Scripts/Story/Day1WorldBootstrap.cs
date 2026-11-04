@@ -168,9 +168,21 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
 [DisallowMultipleComponent]
 public sealed class WoodChoppingMinigame : MonoBehaviour
 {
+    /// <summary>Скорость бегунка на первом круге (доля полоски в секунду).</summary>
+    private const float BaseSpeed = 1.4f;
+
+    /// <summary>Скорость растёт за промах, но не бесконечно: иначе шаг за кадр
+    /// становится больше полоски и она визуально «замирает» между крайними точками.</summary>
+    private const float SpeedPerMiss = 0.15f;
+    private const float MaxSpeed = 2.6f;
+
+    /// <summary>Предел шага за кадр: при просадке fps бегунок не должен перескакивать полосу.</summary>
+    private const float MaxStepPerFrame = 0.12f;
+
     private float marker;       // 0..1
     private float direction = 1f;
-    private float speed = 1.4f;
+    private float speed = BaseSpeed;
+    private int misses;
     private bool active;
     private bool success;
 
@@ -188,13 +200,14 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
         success = false;
         marker = 0f;
         direction = 1f;
-        speed = 1.4f;
+        speed = BaseSpeed;
+        misses = 0;
         InteractionLock.Add("chopping");
 
         // Пока идёт колка — персонаж и камера стоят: игрок рубит, а не ходит вокруг колоды.
         PlayerControlLock.Add("chopping");
         StartCoroutine(Run(onSuccess));
- }
+    }
 
     private System.Collections.IEnumerator Run(System.Action onSuccess)
     {
@@ -226,18 +239,20 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
             return;
         }
 
-        marker += direction * speed * Time.deltaTime;
+        // Скорость держится постоянной, пока игрок не промахнётся: иначе полоска
+        // разгоняется сама по себе и через полминуты перестаёт читаться.
+        float step = Mathf.Clamp(speed * Time.deltaTime, 0f, MaxStepPerFrame);
+        marker += direction * step;
+
         if (marker >= 1f)
         {
             marker = 1f;
             direction = -1f;
-            speed += 0.1f;
         }
         else if (marker <= 0f)
         {
             marker = 0f;
             direction = 1f;
-            speed += 0.1f;
         }
 
         bool pressed;
@@ -258,7 +273,9 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
             }
             else
             {
-                // Промах: бегунок продолжает бег (новый круг ускоряется).
+                // Промах: каждое второе попадание мимо ускоряет бегунок, но в пределах MaxSpeed.
+                misses++;
+                speed = Mathf.Min(BaseSpeed + SpeedPerMiss * misses, MaxSpeed);
                 marker = 0f;
                 direction = 1f;
             }
