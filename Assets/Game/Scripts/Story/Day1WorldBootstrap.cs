@@ -269,7 +269,7 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
             }
         }
 
-        // Выход из мини-игры — Q (Tab теперь занят записной книжкой, Space — прыжком).
+        // Выход из мини-игры — Q (Tab занят записной книжкой, Space теперь просто ничего не делает).
         bool quit;
 #if ENABLE_INPUT_SYSTEM
         Keyboard kb = Keyboard.current;
