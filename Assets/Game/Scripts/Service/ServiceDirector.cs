@@ -534,6 +534,7 @@ public sealed class ServiceDirector : MonoBehaviour
         shelf.transform.localScale = new Vector3(1.6f, 0.1f, 0.6f);
         shelf.layer = layer;
         shelf.AddComponent<ShopShelfInteractable>();
+        ProximityInteractable.EnsureOn(shelf, 2.2f);
 
         GameObject counter = GameObject.CreatePrimitive(PrimitiveType.Cube);
         counter.name = "ShopCounter";
@@ -541,6 +542,7 @@ public sealed class ServiceDirector : MonoBehaviour
         counter.transform.localScale = new Vector3(2.2f, 0.1f, 0.8f);
         counter.layer = layer;
         counter.AddComponent<ShopCounterInteractable>();
+        ProximityInteractable.EnsureOn(counter, 2.2f);
 
         runtimeShop.Add(shelf);
         runtimeShop.Add(counter);

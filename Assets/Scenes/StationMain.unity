@@ -332,8 +332,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   promptText: 
-  plateWorldOffsetY: 1.9
-  playerTag: Player
+  plateHeightOffset: 0.35
+  fallbackHeight: 1.9
   activateDistance: 2.2
   maxVerticalDifference: 3
 --- !u!114 &294357298
@@ -931,6 +931,7 @@ GameObject:
   - component: {fileID: 558208273}
   - component: {fileID: 558208270}
   - component: {fileID: 558208269}
+  - component: {fileID: 558208274}
   m_Layer: 3
   m_Name: WoodPile
   m_TagString: Untagged
@@ -988,6 +989,23 @@ Transform:
   - {fileID: 1544851957}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
+--- !u!114 &558208274
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 558208268}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd8264e62404e684bafc281b8e268a4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  promptText: 
+  plateHeightOffset: 0.35
+  fallbackHeight: 1.9
+  activateDistance: 2.2
+  maxVerticalDifference: 3
 --- !u!1001 &632781226
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1109,6 +1127,7 @@ GameObject:
   - component: {fileID: 647234840}
   - component: {fileID: 647234837}
   - component: {fileID: 647234841}
+  - component: {fileID: 647234842}
   m_Layer: 3
   m_Name: Stove
   m_TagString: Untagged
@@ -1176,6 +1195,23 @@ MonoBehaviour:
   useManualGlowAnchor: 1
   fireGlowLocalAnchor: {x: -3.561, y: -0.028, z: -0.399}
   fireGlowFallbackOffset: {x: 0, y: 0.65, z: 0.35}
+--- !u!114 &647234842
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 647234836}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd8264e62404e684bafc281b8e268a4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  promptText: 
+  plateHeightOffset: 0.35
+  fallbackHeight: 1.9
+  activateDistance: 2.2
+  maxVerticalDifference: 3
 --- !u!1 &689035052
 GameObject:
   m_ObjectHideFlags: 0
@@ -1189,6 +1225,7 @@ GameObject:
   - component: {fileID: 689035055}
   - component: {fileID: 689035054}
   - component: {fileID: 689035053}
+  - component: {fileID: 689035058}
   m_Layer: 3
   m_Name: SnowPile (1)
   m_TagString: Untagged
@@ -1330,6 +1367,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &689035058
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 689035052}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd8264e62404e684bafc281b8e268a4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  promptText: 
+  plateHeightOffset: 0.35
+  fallbackHeight: 1.9
+  activateDistance: 2.2
+  maxVerticalDifference: 3
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -1741,6 +1795,7 @@ GameObject:
   - component: {fileID: 1401396608}
   - component: {fileID: 1401396607}
   - component: {fileID: 1401396611}
+  - component: {fileID: 1401396612}
   m_Layer: 3
   m_Name: SnowPile
   m_TagString: Untagged
@@ -1882,6 +1937,23 @@ MonoBehaviour:
     m_RotationOrder: 4
   moundSegments: 12
   moundRings: 4
+--- !u!114 &1401396612
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1401396606}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd8264e62404e684bafc281b8e268a4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  promptText: 
+  plateHeightOffset: 0.35
+  fallbackHeight: 1.9
+  activateDistance: 2.2
+  maxVerticalDifference: 3
 --- !u!1 &1418047644
 GameObject:
   m_ObjectHideFlags: 0
@@ -2228,8 +2300,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   promptText: 
-  plateWorldOffsetY: 1.9
-  playerTag: Player
+  plateHeightOffset: 0.35
+  fallbackHeight: 1.9
   activateDistance: 2.2
   maxVerticalDifference: 3
 --- !u!114 &1840097450
@@ -2291,8 +2363,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   promptText: 
-  plateWorldOffsetY: 1.9
-  playerTag: Player
+  plateHeightOffset: 0.35
+  fallbackHeight: 1.9
   activateDistance: 2.2
   maxVerticalDifference: 3
 --- !u!114 &1968177552
@@ -2408,8 +2480,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   promptText: 
-  plateWorldOffsetY: 1.9
-  playerTag: Player
+  plateHeightOffset: 0.35
+  fallbackHeight: 1.9
   activateDistance: 2.2
   maxVerticalDifference: 3
 --- !u!114 &2047859660

@@ -248,6 +248,7 @@ public sealed class KotovVisit : MonoBehaviour
 
         var pickup = letter.AddComponent<DoorstepLetterInteractable>();
         pickup.Setup(visitDay);
+        ProximityInteractable.EnsureOn(letter, 2.4f);
         doorstepLetter = letter;
     }
 

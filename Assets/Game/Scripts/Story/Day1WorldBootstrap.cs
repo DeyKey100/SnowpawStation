@@ -68,12 +68,13 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
         }
         else if (door != null)
         {
-            // Перед дверью, ближе к игроку: сугроб у порога записку не заслоняет.
+            // Перед дверью, но не на пороге: иначе плашка записки перебивает «Войти»
+            // (взаимодействия теперь по расстоянию, а не по прицелу).
             Transform player = FindInScene(scene, "playercapsule");
             Vector3 dir = player != null ? player.position - door.position : Vector3.back;
             dir.y = 0f;
             dir = dir.sqrMagnitude > 0.01f ? dir.normalized : Vector3.back;
-            pos = door.position + dir * 1.6f;
+            pos = door.position + dir * 2.8f;
             // Снежный пол — куб с верхней гранью на y≈0.5: ниже записка утонула бы в нём.
             pos.y = door.position.y + 0.06f;
         }
@@ -102,6 +103,7 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
         }
 
         note.AddComponent<KeeperNoteInteractable>();
+        ProximityInteractable.EnsureOn(note);
         Debug.Log($"[Snowpaw Station] Записка смотрителя: {pos}.");
     }
 
@@ -131,6 +133,7 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
         }
 
         shed.AddComponent<WoodShedInteractable>();
+        ProximityInteractable.EnsureOn(shed, 2.4f);
         Debug.Log("[Snowpaw Station] Дровник создан у колоды (дровник до 6 поленьев).");
     }
 

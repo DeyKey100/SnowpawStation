@@ -1,13 +1,11 @@
 using UnityEngine;
-#if ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem;
-#endif
 
 /// <summary>
-/// Взаимодействие по расстоянию, без луча-прицела: игрок подходит — у объекта
-/// появляется плашка с подсказкой, по E вызывается IInteractable на этом же объекте.
-/// Тот же приём, что у входа в магазин (SceneDoorTrigger), но обобщённый:
-/// работает для колонок, стоек и любых «подойди и нажми» объектов.
+/// Маркер «подойди и нажми E»: объект попадает в список PlayerInteraction и,
+/// когда игрок оказывается ближе activateDistance, показывает над собой плашку.
+/// Луч-прицел не используется — срабатывает только расстояние до объекта.
+/// Расстояние считается до габаритов (коллайдер/меш), а не до пивота: у дровяной
+/// кучи и печи пивот стоит далеко от самой геометрии.
 /// </summary>
 [DisallowMultipleComponent]
 public class ProximityInteractable : MonoBehaviour
@@ -15,99 +13,70 @@ public class ProximityInteractable : MonoBehaviour
     [Header("Text")]
     [Tooltip("Пусто — подсказка берётся у IInteractable на этом объекте.")]
     [SerializeField] private string promptText = "";
-    [SerializeField] private float plateWorldOffsetY = 1.9f;
+
+    [Header("Placing")]
+    [Tooltip("Насколько плашка выше верхней точки объекта, метры.")]
+    [SerializeField] private float plateHeightOffset = 0.35f;
+    [Tooltip("Высота плашки над пивотом, если у объекта нет ни коллайдера, ни меша.")]
+    [SerializeField] private float fallbackHeight = 1.9f;
 
     [Header("Proximity")]
-    [SerializeField] private string playerTag = "Player";
     [SerializeField] private float activateDistance = 2.2f;
     [SerializeField] private float maxVerticalDifference = 3f;
 
-    private Transform playerTransform;
-    private Camera viewCamera;
     private IInteractable interactable;
-    private bool playerInRange;
-    private Texture2D plateBackground;
+    private Collider[] cachedColliders;
+    private Renderer[] cachedRenderers;
+    private Bounds cachedBounds;
+    private bool hasBounds;
+    private Vector3 plateAnchor;
+    private float nextBoundsRefresh;
 
-    public bool PlayerInRange => playerInRange;
+    /// <summary>Игрок в радиусе (выставляет PlayerInteraction при выборе ближайшего).</summary>
+    public bool PlayerInRange { get; set; }
 
-    /// <summary>Настройка из кода: радиус срабатывания (ServiceDirector строит колонки в рантайме).</summary>
+    public Vector3 PlateWorldPoint => plateAnchor;
+
+    public bool HasWorldBounds => hasBounds && cachedBounds.size.sqrMagnitude > 1e-6f;
+
+    /// <summary>
+    /// Точка привязки плашки: центр габаритов. Камера висит высоко и смотрит вниз,
+    /// поэтому точку «над крышей» она уводит за верхний край экрана — берём центр.
+    /// </summary>
+    public Vector3 CenterWorldPoint => hasBounds ? cachedBounds.center : transform.position;
+
+    public float ActivateDistance => activateDistance;
+
     public void Setup(float distance)
     {
         activateDistance = distance;
     }
 
-    private void Awake()
+    public void SetPrompt(string text)
     {
-        plateBackground = MakeSolidTexture(new Color(0.02f, 0.03f, 0.04f, 0.82f));
-        interactable = ResolveInteractable();
+        promptText = text;
     }
 
-    private void OnDestroy()
+    /// <summary>Гарантирует маркер на объекте (нужно для объектов, созданных в рантайме).</summary>
+    public static ProximityInteractable EnsureOn(GameObject target, float distance = 2.2f)
     {
-        if (plateBackground != null)
+        if (target == null)
         {
-            Destroy(plateBackground);
+            return null;
         }
+
+        ProximityInteractable marker = target.GetComponent<ProximityInteractable>();
+        if (marker == null)
+        {
+            marker = target.AddComponent<ProximityInteractable>();
+        }
+
+        marker.Setup(distance);
+        return marker;
     }
 
-    private void Update()
-    {
-        RefreshPlayer();
-        RefreshCamera();
-
-        if (playerTransform == null)
-        {
-            playerInRange = false;
-            return;
-        }
-
-        Vector3 delta = playerTransform.position - transform.position;
-        float horizontalDistance = new Vector2(delta.x, delta.z).magnitude;
-        playerInRange = horizontalDistance <= activateDistance &&
-                        Mathf.Abs(delta.y) <= maxVerticalDifference;
-
-        if (!playerInRange || !InteractPressed())
-        {
-            return;
-        }
-
-        if (PauseMenu.IsPaused || InteractionLock.IsLocked || SceneLoadingScreen.IsLoading)
-        {
-            return;
-        }
-
-        // Объект под прицелом забирает [E] себе — не перебиваем его.
-        if (PlayerInteraction.HasFocusedInteractable)
-        {
-            return;
-        }
-
-        if (interactable == null)
-        {
-            interactable = ResolveInteractable();
-        }
-
-        if (interactable != null)
-        {
-            interactable.Interact();
-        }
-    }
-
-    private IInteractable ResolveInteractable()
-    {
-        MonoBehaviour[] components = GetComponents<MonoBehaviour>();
-        for (int i = 0; i < components.Length; i++)
-        {
-            if (components[i] != null && components[i] != this && components[i] is IInteractable found)
-            {
-                return found;
-            }
-        }
-
-        return null;
-    }
-
-    private string CurrentPrompt
+    /// <summary>Подсказка: своя строка, иначе текст IInteractable на этом объекте.</summary>
+    public string Prompt
     {
         get
         {
@@ -116,111 +85,152 @@ public class ProximityInteractable : MonoBehaviour
                 return promptText;
             }
 
-            if (interactable == null)
+            IInteractable target = ResolveTarget();
+            return target != null ? target.GetInteractPrompt() : "";
+        }
+    }
+
+    public IInteractable ResolveTarget()
+    {
+        if (interactable as Object != null)
+        {
+            return interactable;
+        }
+
+        MonoBehaviour[] components = GetComponents<MonoBehaviour>();
+        for (int i = 0; i < components.Length; i++)
+        {
+            if (components[i] != null && components[i] != this && components[i] is IInteractable found)
             {
-                interactable = ResolveInteractable();
+                interactable = found;
+                return found;
+            }
+        }
+
+        interactable = null;
+        return null;
+    }
+
+    /// <summary>
+    /// Проверка расстояния до игрока. out — горизонтальная дистанция до габаритов,
+    /// 0 если игрок стоит вплотную к объекту.
+    /// </summary>
+    public bool TryGetRange(Vector3 playerPosition, out float distance)
+    {
+        // Габариты пересчитываем не каждый кадр: объект статичен, а обход детей дорогой.
+        if (Time.unscaledTime >= nextBoundsRefresh)
+        {
+            nextBoundsRefresh = Time.unscaledTime + 0.5f;
+            RefreshBounds();
+        }
+
+        if (!hasBounds)
+        {
+            Vector3 delta = playerPosition - transform.position;
+            distance = new Vector2(delta.x, delta.z).magnitude;
+            return distance <= activateDistance && Mathf.Abs(delta.y) <= maxVerticalDifference;
+        }
+
+        // Горизонталь: расстояние до прямоугольника габаритов (внутри — ноль).
+        float dx = Mathf.Max(cachedBounds.min.x - playerPosition.x, 0f, playerPosition.x - cachedBounds.max.x);
+        float dz = Mathf.Max(cachedBounds.min.z - playerPosition.z, 0f, playerPosition.z - cachedBounds.max.z);
+        distance = Mathf.Sqrt(dx * dx + dz * dz);
+
+        // Вертикаль: насколько игрок выше/ниже габаритов.
+        float dy = Mathf.Max(cachedBounds.min.y - playerPosition.y, 0f, playerPosition.y - cachedBounds.max.y);
+
+        return distance <= activateDistance && dy <= maxVerticalDifference;
+    }
+
+    /// <summary>Пересчитать габариты и точку плашки (объект мог сдвинуться или сменить масштаб).</summary>
+    public void RefreshBounds()
+    {
+        CacheComponents();
+
+        hasBounds = false;
+        cachedBounds = new Bounds(transform.position, Vector3.zero);
+
+        Accumulate(cachedColliders);
+        Accumulate(cachedRenderers);
+
+        plateAnchor = hasBounds && cachedBounds.size.sqrMagnitude > 1e-6f
+            ? new Vector3(cachedBounds.center.x, cachedBounds.max.y + plateHeightOffset, cachedBounds.center.z)
+            : transform.position + Vector3.up * fallbackHeight;
+    }
+
+    private void Accumulate(Component[] source)
+    {
+        for (int i = 0; i < source.Length; i++)
+        {
+            Component item = source[i];
+            if (item == null || !item.gameObject.activeInHierarchy)
+            {
+                continue;
             }
 
-            return interactable != null ? interactable.GetInteractPrompt() : "";
+            Bounds itemBounds;
+            if (item is Collider collider)
+            {
+                if (!collider.enabled)
+                {
+                    continue;
+                }
+
+                itemBounds = collider.bounds;
+            }
+            else if (item is Renderer renderer)
+            {
+                if (!renderer.enabled)
+                {
+                    continue;
+                }
+
+                itemBounds = renderer.bounds;
+            }
+            else
+            {
+                continue;
+            }
+
+            if (itemBounds.size.sqrMagnitude <= 1e-6f)
+            {
+                continue;
+            }
+
+            if (hasBounds)
+            {
+                cachedBounds.Encapsulate(itemBounds);
+            }
+            else
+            {
+                cachedBounds = itemBounds;
+                hasBounds = true;
+            }
         }
     }
 
-    private void RefreshPlayer()
+    private void CacheComponents()
     {
-        if (playerTransform != null && playerTransform.gameObject.activeInHierarchy)
-        {
-            return;
-        }
-
-        GameObject playerObject = GameObject.FindGameObjectWithTag(playerTag);
-        playerTransform = playerObject != null ? playerObject.transform : null;
+        cachedColliders = GetComponentsInChildren<Collider>(true);
+        cachedRenderers = GetComponentsInChildren<Renderer>(true);
     }
 
-    private void RefreshCamera()
+    private void OnEnable()
     {
-        if (viewCamera == null)
-        {
-            viewCamera = Camera.main;
-        }
+        CacheComponents();
+        RefreshBounds();
+        PlayerInteraction.RegisterMarker(this);
     }
 
-    private bool InteractPressed()
+    private void OnDisable()
     {
-#if ENABLE_INPUT_SYSTEM
-        return Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame;
-#else
-        return Input.GetKeyDown(KeyCode.E);
-#endif
-    }
-
-    private void OnGUI()
-    {
-        if (!playerInRange || viewCamera == null || plateBackground == null || SceneLoadingScreen.IsLoading)
-        {
-            return;
-        }
-
-        string prompt = CurrentPrompt;
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            return;
-        }
-
-        Vector3 worldPoint = transform.position + Vector3.up * plateWorldOffsetY;
-        Vector3 screenPoint = viewCamera.WorldToScreenPoint(worldPoint);
-        if (screenPoint.z <= 0.1f)
-        {
-            // Плашка за камерой — рисовать нечего.
-            return;
-        }
-
-        // Плашка привязана к колонке, поэтому при взгляде в сторону уезжает за край экрана.
-        const float offscreenMargin = 80f;
-        if (screenPoint.x < -offscreenMargin || screenPoint.x > Screen.width + offscreenMargin ||
-            screenPoint.y < -offscreenMargin || screenPoint.y > Screen.height + offscreenMargin)
-        {
-            return;
-        }
-
-        float x = screenPoint.x;
-        float y = Screen.height - screenPoint.y;
-
-        GUIStyle boxStyle = new GUIStyle(GUI.skin.box)
-        {
-            alignment = TextAnchor.MiddleCenter,
-            normal = { background = plateBackground, textColor = Color.white }
-        };
-
-        GUIStyle textStyle = new GUIStyle(GUI.skin.label)
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontSize = 22,
-            fontStyle = FontStyle.Bold,
-            padding = new RectOffset(14, 14, 0, 0),
-            normal = { textColor = Color.white }
-        };
-
-        Vector2 textSize = textStyle.CalcSize(new GUIContent(prompt));
-        float width = Mathf.Clamp(textSize.x + 30f, 170f, Screen.width - 32f);
-        const float height = 44f;
-
-        Rect rect = new Rect(x - width * 0.5f, y - height, width, height);
-        GUI.Box(rect, GUIContent.none, boxStyle);
-        GUI.Label(rect, prompt, textStyle);
-    }
-
-    private Texture2D MakeSolidTexture(Color color)
-    {
-        Texture2D texture = new Texture2D(1, 1);
-        texture.SetPixel(0, 0, color);
-        texture.Apply();
-        return texture;
+        PlayerInRange = false;
+        PlayerInteraction.UnregisterMarker(this);
     }
 
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = new Color(0.2f, 0.9f, 1f, 0.55f);
         Gizmos.DrawWireSphere(transform.position, activateDistance);
-        Gizmos.DrawLine(transform.position, transform.position + Vector3.up * plateWorldOffsetY);
     }
 }
