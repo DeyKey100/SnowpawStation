@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -21,6 +22,14 @@ public class SceneLoadingScreen : MonoBehaviour
     private Texture2D blackTexture;
     private Texture2D barBackground;
     private Texture2D barFill;
+
+    /// <summary>
+    /// Куда смотрела камера в каждой сцене на момент ухода из неё.
+    /// Нужно, чтобы после возврата камера стояла так же, как до входа,
+    /// а не разворачивалась по направлению точки спавна.
+    /// </summary>
+    private static readonly Dictionary<string, StarterAssets.FirstPersonController.CameraFacing> SavedFacings
+        = new Dictionary<string, StarterAssets.FirstPersonController.CameraFacing>();
 
     /// <summary>
     /// Загружает сцену под чёрным экраном. Повторные вызовы во время загрузки игнорируются.
@@ -58,6 +67,8 @@ public class SceneLoadingScreen : MonoBehaviour
         }
 
         IsLoading = true;
+
+        RememberCameraFacing();
 
         GameObject host = new GameObject("SceneLoadingScreen");
         DontDestroyOnLoad(host);
@@ -127,7 +138,7 @@ public class SceneLoadingScreen : MonoBehaviour
 
         if (movePlayer)
         {
-            MovePlayer(spawnPosition, spawnYaw);
+            MovePlayer(sceneName, spawnPosition, spawnYaw);
         }
 
         // Дать новой сцене отрисовать первый кадр под чёрным экраном.
@@ -139,7 +150,7 @@ public class SceneLoadingScreen : MonoBehaviour
         Destroy(gameObject);
     }
 
-    private static void MovePlayer(Vector3 spawnPosition, float spawnYaw)
+    private static void MovePlayer(string sceneName, Vector3 spawnPosition, float spawnYaw)
     {
         GameObject player = GameObject.FindGameObjectWithTag("Player");
         if (player == null)
@@ -158,10 +169,50 @@ public class SceneLoadingScreen : MonoBehaviour
 
         player.transform.SetPositionAndRotation(spawnPosition, Quaternion.Euler(0f, spawnYaw, 0f));
 
+        StarterAssets.FirstPersonController controller3d = player.GetComponent<StarterAssets.FirstPersonController>();
+        if (controller3d != null)
+        {
+            // Если игрок уже был в этой сцене, камера должна встать ровно так,
+            // как он её оставил: сохраняем и восстанавливаем диагональ, смещение
+            // внутри коридора и наклон. Иначе — разворот по точке спавна.
+            if (SavedFacings.TryGetValue(sceneName, out StarterAssets.FirstPersonController.CameraFacing facing))
+            {
+                controller3d.ApplyFacing(facing);
+            }
+            else
+            {
+                controller3d.SetFacingYaw(spawnYaw);
+            }
+        }
+
         if (controllerWasEnabled)
         {
             controller.enabled = true;
         }
+    }
+
+    /// <summary>Запоминает текущее положение камеры для сцены, из которой уходим.</summary>
+    private static void RememberCameraFacing()
+    {
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player == null)
+        {
+            return;
+        }
+
+        StarterAssets.FirstPersonController controller3d = player.GetComponent<StarterAssets.FirstPersonController>();
+        if (controller3d == null)
+        {
+            return;
+        }
+
+        string sceneName = SceneManager.GetActiveScene().name;
+        if (string.IsNullOrEmpty(sceneName))
+        {
+            return;
+        }
+
+        SavedFacings[sceneName] = controller3d.CaptureFacing();
     }
 
     private IEnumerator ShowFailure()
