@@ -135,7 +135,12 @@ public sealed class StoryDirector : MonoBehaviour
         DialogueActions.Register("take_letter_3", () => GiveLetter(3));
         DialogueActions.Register("gaze_break", () => Kotov?.BreakGaze());
         DialogueActions.Register("notice_bare_paw", () => GameState.SetNoticedBarePaw(true));
-        DialogueActions.Register("kotov_decline", () => AddNote("Котов не заходит: «Нельзя мне. Дом выстудишь»."));
+        DialogueActions.Register("kotov_decline", () =>
+        {
+            AddNote("Котов не заходит: «Нельзя мне. Дом выстудишь».");
+            Dialogue?.InsertNextEntry("КОТОВ", "Оставлю тебе письмо у порога...");
+            Kotov?.LeaveLetterAfterDecline();
+        });
         DialogueActions.Register("danila_legend_answer", () => AddNote("Данила: почтальон приходил в шесть вечера, как по часам. Фамилия на «К»."));
         DialogueActions.Register("pickup_warm_stove", () =>
         {

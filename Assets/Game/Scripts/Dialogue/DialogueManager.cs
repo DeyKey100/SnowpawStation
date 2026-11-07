@@ -36,6 +36,21 @@ public sealed class DialogueManager : MonoBehaviour
 
     public DialogueScript Current => script;
 
+    /// <summary>Вставить реплику сразу после текущего элемента диалога.</summary>
+    public void InsertNextEntry(string speaker, string text)
+    {
+        if (script == null || string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        script.entries.Insert(entryIndex + 1, new DialogueEntry
+        {
+            speaker = speaker,
+            text = text,
+        });
+    }
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
