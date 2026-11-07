@@ -6,7 +6,9 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// Колонка. E — начать отпуск топлива по текущему заказу, затем зажать ЛКМ:
 /// литры растут ~8 л/с, отпустить означает сдачу заказа с оценкой объёма.
-/// Один активный поток: на время заправки вешается InteractionLock "refuel".
+/// Подсказка появляется только у той колонки, к которой подъехал посетитель:
+/// пустые колонки молчат. На время заправки вешаются InteractionLock и
+/// PlayerControlLock "refuel" — игрок стоит на месте, камера не крутится.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
@@ -31,10 +33,13 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
     private LineRenderer nozzle;
     private Material hoseMaterial;
 
-    public int PumpIndex { get; private set; }
+    // Номер колонки хранится в сцене: иначе после загрузки сцены он сбрасывался бы в 0.
+    [SerializeField] private int pumpIndex = 1;
+
+    public int PumpIndex => pumpIndex;
     public bool IsFueling => fueling;
 
-    public void Setup(int pumpIndex) => PumpIndex = pumpIndex;
+    public void Setup(int index) => pumpIndex = index;
 
     private void Awake()
     {
@@ -49,9 +54,16 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
     public string GetInteractPrompt()
     {
         ServiceDirector s = Service;
-        if (s == null || s.CurrentOrder == null)
+        if (s == null || !s.CanRefuel)
         {
-            return "[E] Колонка №" + PumpIndex;
+            // Никто не приехал — колонка молчит и плашки не показывает.
+            return "";
+        }
+
+        if (s.OrderPumpNumber != PumpIndex)
+        {
+            // Посетитель стоит у другой колонки: эта занята ничем, подсказки нет.
+            return "";
         }
 
         string good = string.IsNullOrEmpty(s.CurrentOrder.item) ? "" : $" + {Goods.DisplayName(s.CurrentOrder.item)}";
@@ -63,7 +75,7 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
     public void Interact()
     {
         ServiceDirector s = Service;
-        if (s == null || s.CurrentOrder == null || fueling)
+        if (s == null || !s.CanRefuel || fueling || s.OrderPumpNumber != PumpIndex)
         {
             return;
         }
@@ -74,6 +86,9 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
         armedTimer = 0f;
         truckArrival = FindAnyObjectByType<TruckArrivalController>();
         InteractionLock.Add("refuel");
+
+        // Пока идёт отпуск топлива, игрок стоит у колонки: движение и камера заморожены.
+        PlayerControlLock.Add("refuel");
         Debug.Log("[Snowpaw Station] Заправка начата: зажмите ЛКМ.");
     }
 
@@ -99,7 +114,8 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
         if (hold)
         {
             armed = false; // игрок реально начал качать
-            float target = Service.CurrentOrder != null ? Service.CurrentOrder.liters : 0f;
+            ServiceDirector s = Service;
+            float target = s != null && s.CurrentOrder != null ? s.CurrentOrder.liters : 0f;
             poured = Mathf.Min(poured + LitersPerSecond * Time.deltaTime, Mathf.Max(target * 1.2f, 5f));
             return;
         }
@@ -118,8 +134,7 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
             Debug.Log("[Snowpaw Station] Заправка отменена: ЛКМ не зажата.");
             fueling = false;
             armed = false;
-            HideHose();
-            InteractionLock.Remove("refuel");
+            ReleaseLocks();
         }
     }
 
@@ -239,9 +254,28 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
 
         fueling = false;
         armed = false;
-        HideHose();
         InteractionLock.Remove("refuel");
         Service.OnFuelDelivered(poured);
+    }
+
+    /// <summary>Снять оба замка: взаимодействие и заморозку персонажа.</summary>
+    private void ReleaseLocks()
+    {
+        InteractionLock.Remove("refuel");
+        PlayerControlLock.Remove("refuel");
+    }
+
+    private void OnDisable()
+    {
+        // Сцену выгрузили или объект выключили посреди заправки — иначе игрок
+        // остался бы замороженным навсегда.
+        if (fueling)
+        {
+            fueling = false;
+            armed = false;
+        }
+
+        ReleaseLocks();
     }
 
     private void OnGUI()

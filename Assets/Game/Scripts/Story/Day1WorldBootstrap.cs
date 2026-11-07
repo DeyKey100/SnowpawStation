@@ -35,8 +35,11 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
         string name = scene.name.ToLowerInvariant();
         bool interior = name.Contains("interior");
 
-        // Записка нужна в любой сцене: без неё не закрывается утро дня 1.
-        SpawnNote(scene, interior);
+        // Записка лежит только в доме: на улице её нет, пока игрок не зайдёт внутрь.
+        if (interior)
+        {
+            SpawnNote(scene);
+        }
 
         if (!interior && DayLoopManager.Instance != null && DayLoopManager.Instance.CurrentDay >= 3)
         {
@@ -44,7 +47,7 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
         }
     }
 
-    private void SpawnNote(Scene scene, bool interior)
+    private void SpawnNote(Scene scene)
     {
         // Записку читают один раз за прохождение: после перезагрузки сцены (магазин → улица)
         // она не должна появляться снова.
@@ -58,39 +61,16 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
             return;
         }
 
-        Transform stove = interior ? null : FindInScene(scene, "stove");
-        Transform door = FindInScene(scene, "door");
-
-        Vector3 pos;
-        if (interior)
-        {
-            pos = new Vector3(-0.6f, 1.12f, 0.4f); // у стойки, «под кружкой»
-        }
-        else if (door != null)
-        {
-            // Перед дверью, ближе к игроку: сугроб у порога записку не заслоняет.
-            Transform player = FindInScene(scene, "playercapsule");
-            Vector3 dir = player != null ? player.position - door.position : Vector3.back;
-            dir.y = 0f;
-            dir = dir.sqrMagnitude > 0.01f ? dir.normalized : Vector3.back;
-            pos = door.position + dir * 1.6f;
-            // Снежный пол — куб с верхней гранью на y≈0.5: ниже записка утонула бы в нём.
-            pos.y = door.position.y + 0.06f;
-        }
-        else if (stove != null)
-        {
-            pos = new Vector3(stove.position.x + 0.75f, 0.35f, stove.position.z + 0.55f);
-        }
-        else
-        {
-            pos = new Vector3(-1.3f, 0.35f, -7.4f);
-        }
+        // Записка лежит на столе (стойке с кассой) внутри дома: на улице её нет,
+        // пока игрок не зайдёт внутрь. Стойка тоже интерактивна, поэтому записке выдан
+        // приоритет: иначе подсказку кассы получал бы тот, кто ближе к стойке, а не к записке.
+        Vector3 pos = new Vector3(-0.62f, 1.09f, 0.05f); // на столе, чуть в стороне от кассы
 
         note = GameObject.CreatePrimitive(PrimitiveType.Cube);
         note.name = "KeeperNote";
         note.transform.position = pos;
         note.transform.localScale = new Vector3(0.34f, 0.03f, 0.46f);
-        note.transform.rotation = Quaternion.Euler(0f, interior ? 0f : 35f, 0f);
+        note.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
         ApplyInteractableLayer(note);
 
         Renderer renderer = note.GetComponent<Renderer>();
@@ -102,6 +82,8 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
         }
 
         note.AddComponent<KeeperNoteInteractable>();
+        // Приоритет 4 = «важнее всего на столе»: записка выигрывает у стойки и полки.
+        ProximityInteractable.EnsureOn(note, 2.2f, 4);
         Debug.Log($"[Snowpaw Station] Записка смотрителя: {pos}.");
     }
 
@@ -131,6 +113,7 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
         }
 
         shed.AddComponent<WoodShedInteractable>();
+        ProximityInteractable.EnsureOn(shed, 2.4f);
         Debug.Log("[Snowpaw Station] Дровник создан у колоды (дровник до 6 поленьев).");
     }
 
@@ -185,9 +168,21 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
 [DisallowMultipleComponent]
 public sealed class WoodChoppingMinigame : MonoBehaviour
 {
+    /// <summary>Скорость бегунка на первом круге (доля полоски в секунду).</summary>
+    private const float BaseSpeed = 1.4f;
+
+    /// <summary>Скорость растёт за промах, но не бесконечно: иначе шаг за кадр
+    /// становится больше полоски и она визуально «замирает» между крайними точками.</summary>
+    private const float SpeedPerMiss = 0.15f;
+    private const float MaxSpeed = 2.6f;
+
+    /// <summary>Предел шага за кадр: при просадке fps бегунок не должен перескакивать полосу.</summary>
+    private const float MaxStepPerFrame = 0.12f;
+
     private float marker;       // 0..1
     private float direction = 1f;
-    private float speed = 1.4f;
+    private float speed = BaseSpeed;
+    private int misses;
     private bool active;
     private bool success;
 
@@ -205,10 +200,14 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
         success = false;
         marker = 0f;
         direction = 1f;
-        speed = 1.4f;
+        speed = BaseSpeed;
+        misses = 0;
         InteractionLock.Add("chopping");
+
+        // Пока идёт колка — персонаж и камера стоят: игрок рубит, а не ходит вокруг колоды.
+        PlayerControlLock.Add("chopping");
         StartCoroutine(Run(onSuccess));
- }
+    }
 
     private System.Collections.IEnumerator Run(System.Action onSuccess)
     {
@@ -218,10 +217,19 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
         }
 
         InteractionLock.Remove("chopping");
+        PlayerControlLock.Remove("chopping");
         if (success)
         {
             onSuccess?.Invoke();
         }
+    }
+
+    /// <summary>Колоду выгрузили/выключили посреди колки — иначе игрок остался бы замороженным.</summary>
+    private void OnDisable()
+    {
+        active = false;
+        InteractionLock.Remove("chopping");
+        PlayerControlLock.Remove("chopping");
     }
 
     private void Update()
@@ -231,18 +239,20 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
             return;
         }
 
-        marker += direction * speed * Time.deltaTime;
+        // Скорость держится постоянной, пока игрок не промахнётся: иначе полоска
+        // разгоняется сама по себе и через полминуты перестаёт читаться.
+        float step = Mathf.Clamp(speed * Time.deltaTime, 0f, MaxStepPerFrame);
+        marker += direction * step;
+
         if (marker >= 1f)
         {
             marker = 1f;
             direction = -1f;
-            speed += 0.1f;
         }
         else if (marker <= 0f)
         {
             marker = 0f;
             direction = 1f;
-            speed += 0.1f;
         }
 
         bool pressed;
@@ -263,13 +273,15 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
             }
             else
             {
-                // Промах: бегунок продолжает бег (новый круг ускоряется).
+                // Промах: каждое второе попадание мимо ускоряет бегунок, но в пределах MaxSpeed.
+                misses++;
+                speed = Mathf.Min(BaseSpeed + SpeedPerMiss * misses, MaxSpeed);
                 marker = 0f;
                 direction = 1f;
             }
         }
 
-        // Выход из мини-игры — Q (Tab теперь занят записной книжкой, Space — прыжком).
+        // Выход из мини-игры — Q (Tab занят записной книжкой, Space теперь просто ничего не делает).
         bool quit;
 #if ENABLE_INPUT_SYSTEM
         Keyboard kb = Keyboard.current;

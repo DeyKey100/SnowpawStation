@@ -102,6 +102,54 @@ public class DayLoopManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Открыта ли утренняя задача. Записка — задача-ключ: пока её не прочли, дрова,
+    /// печь и сугробы закрыты, иначе утро закрывается вслепую.
+    /// </summary>
+    public bool IsMorningTaskUnlocked(string taskId)
+    {
+        if (CurrentState != DayState.Morning)
+        {
+            return true;
+        }
+
+        List<DayPlan.MorningTask> tasks = DayPlans.GetMorningTasks(currentDay);
+        for (int i = 0; i < tasks.Count; i++)
+        {
+            if (!tasks[i].gate)
+            {
+                continue;
+            }
+
+            if (tasks[i].id == taskId)
+            {
+                return true;
+            }
+
+            if (GetTaskProgress(tasks[i].id) < tasks[i].target)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Первая незакрытая задача утра — что игроку делать прямо сейчас.</summary>
+    public DayPlan.MorningTask GetCurrentTask()
+    {
+        List<DayPlan.MorningTask> tasks = DayPlans.GetMorningTasks(currentDay);
+        for (int i = 0; i < tasks.Count; i++)
+        {
+            if (tasks[i].required && GetTaskProgress(tasks[i].id) < tasks[i].target)
+            {
+                return tasks[i];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Отметить прогресс обязательной утренней задачи (полено, сугроб, дровник...).
     /// Когда все обязательные задачи закрыты — автоматический переход в Смену. Повторные вызовы
     /// сверх целевого значения просто игнорируются.
@@ -117,6 +165,12 @@ public class DayLoopManager : MonoBehaviour
         if (task == null)
         {
             Debug.LogWarning($"DayLoopManager: задача '{taskId}' не входит в утро дня {currentDay}.");
+            return;
+        }
+
+        if (!IsMorningTaskUnlocked(taskId))
+        {
+            Debug.Log($"[Snowpaw Station] '{task.label}' ещё закрыта: сначала прочитайте записку.");
             return;
         }
 
@@ -272,6 +326,7 @@ public class DayLoopManager : MonoBehaviour
         pendingGuests.Clear();
         CurrentState = DayState.Morning;
         InteractionLock.Reset();
+        PlayerControlLock.Reset();
 
         DayChanged?.Invoke(currentDay);
         DayStarted?.Invoke(currentDay);

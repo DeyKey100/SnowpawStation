@@ -30,6 +30,18 @@ public sealed class ServiceDirector : MonoBehaviour
     /// <summary>Текущий заказ смены; null — смена не идёт.</summary>
     public Order CurrentOrder { get; private set; }
 
+    /// <summary>
+    /// Номер колонки (1..4), к которой встал текущий посетитель; 0 — никого нет.
+    /// Плашка «[E] Заправить» показывается только у этой колонки: остальные стоят
+    /// пустые, и подходить к ним незачем.
+    /// </summary>
+    public int OrderPumpNumber => CurrentOrder != null && !fuelDeliveredForCurrentOrder && !itemStageActive
+        ? CurrentOrder.pumpIndex + 1
+        : 0;
+
+    /// <summary>Заказ ещё можно заправлять: заказ есть и топливо по нему не выдано.</summary>
+    public bool CanRefuel => CurrentOrder != null && !fuelDeliveredForCurrentOrder && !itemStageActive;
+
     /// <summary>Часы: каждая обслуженная машина сдвигает время, таймера нет.</summary>
     public string Clock => CurrentState == "morning" ? "08:00" : CurrentState == "evening" ? "18:00" : clockText;
 
@@ -48,6 +60,9 @@ public sealed class ServiceDirector : MonoBehaviour
 
     private readonly List<GameObject> runtimePumps = new List<GameObject>();
     private readonly List<GameObject> runtimeShop = new List<GameObject>();
+
+    /// <summary>Заглушка машины текущего посетителя (вытянутый куб у его колонки).</summary>
+    private VisitorCarPlaceholder visitorCar;
 
     public static ServiceDirector Instance { get; private set; }
 
@@ -72,6 +87,7 @@ public sealed class ServiceDirector : MonoBehaviour
     private void OnDestroy()
     {
         Instance = null;
+        DespawnVisitorCar();
         if (DayLoopManager.Instance != null)
         {
             DayLoopManager.Instance.PhaseChanged -= OnPhaseChanged;
@@ -87,6 +103,17 @@ public sealed class ServiceDirector : MonoBehaviour
     {
         EnsurePumps(scene);
         EnsureShop(scene);
+
+        // Машина живёт в сцене двора: после похода в магазин за товаром (Котлета просит кофе)
+        // она уничтожается вместе со сценой, а заказ ещё активен — ставим её обратно к колонке.
+        if (CurrentOrder != null && !scene.name.ToLowerInvariant().Contains("interior"))
+        {
+            GameObject existing = GameObject.Find("VisitorCar");
+            if (existing == null)
+            {
+                SpawnVisitorCar(CurrentOrder);
+            }
+        }
     }
 
     private void OnPhaseChanged(int day, DayLoopManager.DayState state)
@@ -111,12 +138,14 @@ public sealed class ServiceDirector : MonoBehaviour
             CurrentState = "evening";
             CurrentOrder = null;
             CarriedGood = null;
+            DespawnVisitorCar();
             OrderChanged?.Invoke(null);
         }
         else if (state == DayLoopManager.DayState.Morning)
         {
             CurrentState = "morning";
             CurrentOrder = null;
+            DespawnVisitorCar();
             OrderChanged?.Invoke(null);
         }
     }
@@ -134,9 +163,39 @@ public sealed class ServiceDirector : MonoBehaviour
 
         yield return new WaitForSeconds(0.8f);
 
+        // Первый посетитель приезжает только на улице и только после записки:
+        // если игрок ещё в магазине, машина подъедет, как только он выйдет.
+        while (CurrentState == "shift" && !CanVisitorArrive)
+        {
+            yield return null;
+        }
+
         if (CurrentState == "shift" && CurrentOrder == null)
         {
             NextOrder();
+        }
+    }
+
+    /// <summary>
+    /// Посетитель может приехать: смена идёт, записка прочитана и игрок на улице.
+    /// В интерьере машины нет — она стоит во дворе, которого в этой сцене не существует.
+    /// </summary>
+    private bool CanVisitorArrive
+    {
+        get
+        {
+            if (DayLoopManager.Instance == null ||
+                DayLoopManager.Instance.CurrentState != DayLoopManager.DayState.WorkShift)
+            {
+                return false;
+            }
+
+            if (!GameState.IsDayEventDone(KeeperNoteInteractable.ReadEventId))
+            {
+                return false;
+            }
+
+            return !SceneManager.GetActiveScene().name.ToLowerInvariant().Contains("interior");
         }
     }
 
@@ -194,12 +253,71 @@ public sealed class ServiceDirector : MonoBehaviour
         if (CurrentOrder != null)
         {
             Debug.Log($"[Snowpaw Station] Заказ: {CurrentOrder.displayName} — {CurrentOrder.liters:0} л{(CurrentOrder.item != null ? $", {Goods.DisplayName(CurrentOrder.item)}" : "")}.");
+            SpawnVisitorCar(CurrentOrder);
             OrderChanged?.Invoke(CurrentOrder);
             if (!StartFirstTruckArrival(CurrentOrder))
             {
                 ShowGreeting(CurrentOrder);
             }
         }
+        else
+        {
+            DespawnVisitorCar();
+        }
+    }
+
+    // ================= ЗАГЛУШКА МАШИНЫ =================
+
+    /// <summary>Поставить вытянутый куб у колонки, к которой встал посетитель.</summary>
+    private void SpawnVisitorCar(Order order)
+    {
+        DespawnVisitorCar();
+
+        int pumpNumber = order.pumpIndex + 1;
+        if (!TryGetPumpPosition(pumpNumber, out Vector3 pumpPosition))
+        {
+            return;
+        }
+
+        // Машина встаёт с внешней стороны островка: у левых колонок — налево по X,
+        // у правых — направо, иначе она оказалась бы между колонками.
+        float side = pumpPosition.x < 0f ? -1f : 1f;
+        visitorCar = VisitorCarPlaceholder.Spawn(pumpPosition, side);
+    }
+
+    private void DespawnVisitorCar()
+    {
+        if (visitorCar != null)
+        {
+            Destroy(visitorCar.gameObject);
+            visitorCar = null;
+        }
+    }
+
+    /// <summary>Позиция колонки по её номеру (1..4): из сцены, иначе из таблицы.</summary>
+    private bool TryGetPumpPosition(int pumpNumber, out Vector3 position)
+    {
+        int index = pumpNumber - 1;
+        if (index < 0 || index >= FallbackPumpPositions.Length)
+        {
+            position = Vector3.zero;
+            return false;
+        }
+
+        List<GameObject> pumps = FindScenePumps();
+        pumps.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+        for (int i = 0; i < pumps.Count; i++)
+        {
+            FuelPumpInteractable fuel = pumps[i].GetComponent<FuelPumpInteractable>();
+            if (fuel != null && fuel.PumpIndex == pumpNumber)
+            {
+                position = pumps[i].transform.position;
+                return true;
+            }
+        }
+
+        position = FallbackPumpPositions[index];
+        return true;
     }
 
     private bool StartFirstTruckArrival(Order order)
@@ -278,7 +396,15 @@ public sealed class ServiceDirector : MonoBehaviour
         fuelDeliveredForCurrentOrder = true;
         AdvanceClock();
 
-        if (order.isGuest && !string.IsNullOrEmpty(order.item))
+        // Клиент, который просит ещё и товар (Дядя Котлета — кофе), остаётся у колонки:
+        // машина уезжает только после выдачи товара, в CompleteOrder.
+        bool awaitsItem = order.isGuest && !string.IsNullOrEmpty(order.item);
+        if (!awaitsItem)
+        {
+            DespawnVisitorCar();
+        }
+
+        if (awaitsItem)
         {
             itemStageActive = true;
             Debug.Log($"[Snowpaw Station] Ждём товар: {Goods.DisplayName(order.item)} (полка → стойка → подтвердить).");
@@ -383,6 +509,9 @@ public sealed class ServiceDirector : MonoBehaviour
             queue.RemoveAt(0);
         }
 
+        // Заглушка машины не должна переживать свой заказ.
+        DespawnVisitorCar();
+
         if (done.isGuest)
         {
             DayLoopManager.Instance.NotifyGuestServed(done.id);
@@ -408,12 +537,21 @@ public sealed class ServiceDirector : MonoBehaviour
 
     // ================= КОЛОНКИ / МАГАЗИН В РАНТАЙМЕ =================
 
-    // Колонки стоят в ряд перед станцией: точные координаты сцены StationMain.
+    // Четыре колонки заправки: два острова по две колонки, координаты из меша gas_station.fbx.
+    // Сцена уже содержит объекты FuelPump_1..4; таблица — запасной вариант, если их нет.
     private static readonly Vector3[] FallbackPumpPositions =
     {
-        new Vector3(-6.1f, 1.4f, -1.8f),
-        new Vector3(0.9f, 1.4f, -1.8f),
+        new Vector3(-6.12f, PumpGroundY, -2.87f),
+        new Vector3(-6.12f, PumpGroundY, 2.97f),
+        new Vector3(0.91f, PumpGroundY, -2.87f),
+        new Vector3(0.91f, PumpGroundY, 2.97f),
     };
+
+    /// <summary>Верх снежного пола: на нём стоят колонки и остальные объекты двора.</summary>
+    private const float PumpGroundY = 0.5f;
+
+    /// <summary>Радиус, в котором у колонки появляется табличка «[E] ...».</summary>
+    private const float PumpPromptDistance = 2.2f;
 
     /// <summary>Колонки — только на улице (не в интерьере магазина).</summary>
     private void EnsurePumps(Scene scene)
@@ -423,29 +561,21 @@ public sealed class ServiceDirector : MonoBehaviour
             return;
         }
 
-        int layer = LayerMask.NameToLayer("Interactable");
-        if (layer < 0)
-        {
-            layer = 0;
-        }
-
         // Находим существующие колонки в активной сцене...
         List<GameObject> pumps = FindScenePumps();
         int created = 0;
-        for (int i = pumps.Count; i < 2; i++)
+        for (int i = pumps.Count; i < FallbackPumpPositions.Length; i++)
         {
-            GameObject pump = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            pump.name = "RuntimeFuelPump_" + (i + 1);
-            Vector3 pos = FallbackPumpPositions[i % FallbackPumpPositions.Length];
+            GameObject pump = new GameObject("FuelPump_" + (i + 1));
+            pump.transform.position = FallbackPumpPositions[i];
 
-            // Точные координаты сцены: цилиндр h≈1.8 на снежном полу (верх y≈0.5).
-            pos.y = 1.4f;
-
-            pump.transform.position = pos;
-            pump.transform.localScale = new Vector3(0.6f, 0.9f, 0.6f);
-            pump.layer = layer;
+            // Колонка — только точка взаимодействия: меш колонки уже есть в gas_station.fbx,
+            // поэтому своего коллайдера у неё нет (иначе луч прицела ловил бы пустышку).
+            pump.layer = 0;
             FuelPumpInteractable fuel = pump.AddComponent<FuelPumpInteractable>();
             fuel.Setup(i + 1);
+            ProximityInteractable proximity = pump.AddComponent<ProximityInteractable>();
+            proximity.Setup(PumpPromptDistance);
             runtimePumps.Add(pump);
             created++;
         }
@@ -458,6 +588,15 @@ public sealed class ServiceDirector : MonoBehaviour
                 fuel = pumps[i].AddComponent<FuelPumpInteractable>();
                 fuel.Setup(i + 1);
             }
+
+            // Колонки в сцене могли быть расставлены вручную: доводим до нужного вида.
+            ProximityInteractable proximity = pumps[i].GetComponent<ProximityInteractable>();
+            if (proximity == null)
+            {
+                proximity = pumps[i].AddComponent<ProximityInteractable>();
+            }
+
+            proximity.Setup(PumpPromptDistance);
         }
 
         if (created > 0)
@@ -480,10 +619,12 @@ public sealed class ServiceDirector : MonoBehaviour
             GameObject[] roots = scene.GetRootGameObjects();
             for (int i = 0; i < roots.Length; i++)
             {
+                // Колонки сцены — это FuelPump_1..4. Меш колонок внутри gas_station.fbx
+                // (stat_fuel_dispenser_mirror) по имени не матчится, поэтому лишних объектов не будет.
                 CollectByName(roots[i].transform, result, t =>
                 {
                     string n = t.name.ToLowerInvariant();
-                    return n.Contains("pump") || n.Contains("колонк") || n.Contains("fuel_pump");
+                    return n.StartsWith("fuelpump_") || n.Contains("колонк") || n.Contains("runtimefuelpump");
                 });
             }
         }
@@ -568,6 +709,7 @@ public sealed class ServiceDirector : MonoBehaviour
         shelf.transform.localScale = new Vector3(1.6f, 0.1f, 0.6f);
         shelf.layer = layer;
         shelf.AddComponent<ShopShelfInteractable>();
+        ProximityInteractable.EnsureOn(shelf, 2.2f);
 
         GameObject counter = GameObject.CreatePrimitive(PrimitiveType.Cube);
         counter.name = "ShopCounter";
@@ -575,6 +717,7 @@ public sealed class ServiceDirector : MonoBehaviour
         counter.transform.localScale = new Vector3(2.2f, 0.1f, 0.8f);
         counter.layer = layer;
         counter.AddComponent<ShopCounterInteractable>();
+        ProximityInteractable.EnsureOn(counter, 2.2f);
 
         runtimeShop.Add(shelf);
         runtimeShop.Add(counter);

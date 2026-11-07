@@ -1,103 +1,207 @@
+using System.Collections.Generic;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
 
+/// <summary>
+/// Взаимодействие по расстоянию вместо луча из камеры: на каждом интерактивном
+/// объекте стоит ProximityInteractable, а здесь выбирается ближайший подошедший.
+/// Плашка и нажатие [E] общие на всех — рядом стоящие объекты не спорят за клавишу.
+/// </summary>
 public class PlayerInteraction : MonoBehaviour
 {
-    [SerializeField] private float interactDistance = 3f;
-    [SerializeField] private LayerMask interactableLayer;
+    [Header("Input")]
     [SerializeField] private KeyCode interactKey = KeyCode.E;
-    [SerializeField] private Camera interactionCamera;
 
-    private IInteractable currentInteractable;
-    private bool cameraErrorReported;
-    private Texture2D promptBackground;
+    [Header("Proximity")]
+    [SerializeField] private string playerTag = "Player";
 
-    /// <summary>Объект под прицелом у локального игрока (для дверных триггеров: приоритет у [E]-взаимодействия).</summary>
+    private static readonly List<ProximityInteractable> markers = new List<ProximityInteractable>();
+
+    /// <summary>Сколько метров близости «стоит» одна единица приоритета маркера.</summary>
+    private const float PriorityMeters = 0.5f;
+
+    private Transform playerTransform;
+    private Camera viewCamera;
+    private ProximityInteractable focused;
+    private Texture2D plateBackground;
+
+    /// <summary>Объект в радиусе с непустой подсказкой (дверные триггеры уступают ему [E]).</summary>
     public static bool HasFocusedInteractable { get; private set; }
 
-    private void OnDestroy()
+    /// <summary>Объект, который сейчас показывает плашку (только для проверок и отладки).</summary>
+    public static ProximityInteractable Focused { get; private set; }
+
+    public static void RegisterMarker(ProximityInteractable marker)
     {
-        if (promptBackground != null)
+        if (marker == null || markers.Contains(marker))
         {
-            Destroy(promptBackground);
+            return;
         }
+
+        markers.Add(marker);
+    }
+
+    public static void UnregisterMarker(ProximityInteractable marker)
+    {
+        if (marker == null)
+        {
+            return;
+        }
+
+        markers.Remove(marker);
+    }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        markers.Clear();
+        Focused = null;
+        HasFocusedInteractable = false;
     }
 
     private void Awake()
     {
-        promptBackground = MakeSolidTexture(new Color(0.02f, 0.03f, 0.04f, 0.82f));
+        plateBackground = MakeSolidTexture(new Color(0.02f, 0.03f, 0.04f, 0.82f));
+    }
 
-        if (interactionCamera == null)
+    private void OnDestroy()
+    {
+        if (plateBackground != null)
         {
-            interactionCamera = FindMainCamera();
-        }
-
-        if (interactionCamera == null)
-        {
-            Debug.LogError("PlayerInteraction не нашёл камеру. Назначьте Main Camera в поле Interaction Camera.", this);
-            cameraErrorReported = true;
+            Destroy(plateBackground);
         }
     }
 
     private void Update()
     {
-        if (PauseMenu.IsPaused)
+        RefreshPlayer();
+        RefreshCamera();
+        markers.RemoveAll(marker => marker == null);
+
+        if (playerTransform == null)
         {
-            currentInteractable = null;
-            HasFocusedInteractable = false;
+            ClearFocus();
             return;
         }
 
         // Диалог/мини-игра/заправка держат InteractionLock: мир не интерактивен.
-        if (InteractionLock.IsLocked)
+        if (PauseMenu.IsPaused || InteractionLock.IsLocked || SceneLoadingScreen.IsLoading)
         {
-            currentInteractable = null;
-            HasFocusedInteractable = false;
+            ClearFocus();
             return;
         }
 
-        DetectInteractable();
-        HasFocusedInteractable = currentInteractable != null;
-
-        if (currentInteractable != null && IsInteractPressed())
+        if (focused != null && (!focused.isActiveAndEnabled || !markers.Contains(focused)))
         {
-            currentInteractable.Interact();
+            focused = null;
+        }
+
+        focused = FindNearest(playerTransform.position, out float focusedDistance);
+
+        if (focused == null)
+        {
+            ClearFocus();
+            return;
+        }
+
+        // Дверь ближе предмета — [E] и плашку отдаём двери, иначе записка на пороге
+        // «съедала» нажатие и войти было нельзя.
+        SceneDoorTrigger nearestDoor = SceneDoorTrigger.NearestInRange(playerTransform.position, out float doorDistance);
+        if (nearestDoor != null && doorDistance < focusedDistance)
+        {
+            ClearFocus();
+            return;
+        }
+
+        Focused = focused;
+        HasFocusedInteractable = true;
+
+        if (!InteractPressed())
+        {
+            return;
+        }
+
+        IInteractable target = focused.ResolveTarget();
+        if (target != null)
+        {
+            target.Interact();
         }
     }
 
-    private void DetectInteractable()
+    /// <summary>Ближайший объект в радиусе, у которого есть непустая подсказка.</summary>
+    private static ProximityInteractable FindNearest(Vector3 playerPosition, out float nearestDistance)
     {
-        if (interactionCamera == null)
+        ProximityInteractable nearest = null;
+        float bestScore = float.MaxValue;
+        nearestDistance = float.MaxValue;
+
+        for (int i = 0; i < markers.Count; i++)
         {
-            if (!cameraErrorReported)
+            ProximityInteractable marker = markers[i];
+            if (marker == null || !marker.isActiveAndEnabled)
             {
-                Debug.LogError("PlayerInteraction не может определить объект: камера недоступна.", this);
-                cameraErrorReported = true;
+                continue;
             }
 
-            currentInteractable = null;
+            bool inRange = marker.TryGetRange(playerPosition, out float distance);
+            marker.PlayerInRange = inRange;
+
+            if (!inRange)
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(marker.Prompt))
+            {
+                continue;
+            }
+
+            // Приоритет перевешивает близость: записка лежит на столе рядом со стойкой,
+            // и без него подсказку кассы получал бы тот, кто стоит дальше от записки.
+            float score = distance - marker.Priority * PriorityMeters;
+
+            if (score >= bestScore)
+            {
+                continue;
+            }
+
+            bestScore = score;
+            nearest = marker;
+            nearestDistance = distance;
+        }
+
+        return nearest;
+    }
+
+    private void ClearFocus()
+    {
+        focused = null;
+        Focused = null;
+        HasFocusedInteractable = false;
+    }
+
+    private void RefreshPlayer()
+    {
+        if (playerTransform != null && playerTransform.gameObject.activeInHierarchy)
+        {
             return;
         }
 
-        // Луч пускается из центра экрана (прицела)
-        Ray ray = interactionCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-
-        if (Physics.Raycast(ray, out RaycastHit hit, interactDistance, interactableLayer))
-        {
-            IInteractable interactable = hit.collider.GetComponentInParent<IInteractable>();
-            if (interactable != null)
-            {
-                currentInteractable = interactable;
-                return;
-            }
-        }
-
-        currentInteractable = null;
+        GameObject playerObject = GameObject.FindGameObjectWithTag(playerTag);
+        playerTransform = playerObject != null ? playerObject.transform : transform;
     }
 
-    private bool IsInteractPressed()
+    private void RefreshCamera()
+    {
+        if (viewCamera == null)
+        {
+            viewCamera = Camera.main;
+        }
+    }
+
+    private bool InteractPressed()
     {
 #if ENABLE_INPUT_SYSTEM
         return interactKey == KeyCode.E &&
@@ -108,51 +212,68 @@ public class PlayerInteraction : MonoBehaviour
 #endif
     }
 
-    private Camera FindMainCamera()
-    {
-        Camera camera = Camera.main;
-        if (camera != null) return camera;
-
-        Camera[] cameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
-        return cameras.Length > 0 ? cameras[0] : null;
-    }
-
     private void OnGUI()
     {
-        if (currentInteractable == null) return;
+        if (focused == null || viewCamera == null || plateBackground == null || SceneLoadingScreen.IsLoading)
+        {
+            return;
+        }
 
-        string prompt = currentInteractable.GetInteractPrompt();
-        if (string.IsNullOrWhiteSpace(prompt)) return;
+        string prompt = focused.Prompt;
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return;
+        }
+
+        Vector3 screenPoint = viewCamera.WorldToScreenPoint(focused.CenterWorldPoint);
+        if (screenPoint.z <= 0.1f)
+        {
+            // Объект за камерой — рисовать нечего.
+            return;
+        }
+
+        // Отвернулись в сторону — плашки нет.
+        const float sideMargin = 60f;
+        if (screenPoint.x < -sideMargin || screenPoint.x > Screen.width + sideMargin)
+        {
+            return;
+        }
+
+        float x = screenPoint.x;
+
+        // Камера висит высоко и смотрит вниз под 45°, поэтому «над объектом» в мире и
+        // «над объектом» на экране — разные вещи. Привязываемся к экранной проекции
+        // центра объекта и поднимаем плашку на фиксированное число пикселей.
+        const float plateLiftPixels = 46f;
+        float y = (Screen.height - screenPoint.y) - plateLiftPixels;
 
         GUIStyle boxStyle = new GUIStyle(GUI.skin.box)
         {
             alignment = TextAnchor.MiddleCenter,
-            normal =
-            {
-                background = promptBackground,
-                textColor = Color.white
-            }
+            normal = { background = plateBackground, textColor = Color.white }
         };
 
-        GUIStyle style = new GUIStyle(GUI.skin.label)
+        GUIStyle textStyle = new GUIStyle(GUI.skin.label)
         {
             alignment = TextAnchor.MiddleCenter,
-            fontSize = 24,
+            fontSize = 22,
             fontStyle = FontStyle.Bold,
-            padding = new RectOffset(18, 18, 0, 0),
+            padding = new RectOffset(14, 14, 0, 0),
             normal = { textColor = Color.white }
         };
 
-        Vector2 textSize = style.CalcSize(new GUIContent(prompt));
-        float promptWidth = Mathf.Clamp(textSize.x + 36f, 260f, Screen.width - 32f);
-        Rect promptRect = new Rect(
-            Screen.width * 0.5f - promptWidth * 0.5f,
-            Screen.height - 105f,
-            promptWidth,
-            52f);
+        Vector2 textSize = textStyle.CalcSize(new GUIContent(prompt));
+        float width = Mathf.Clamp(textSize.x + 30f, 170f, Screen.width - 32f);
+        const float height = 44f;
 
-        GUI.Box(promptRect, GUIContent.none, boxStyle);
-        GUI.Label(promptRect, prompt, style);
+        // Поджимаем к границам экрана, чтобы плашка не исчезала у краёв кадра.
+        const float margin = 12f;
+        x = Mathf.Clamp(x, width * 0.5f + margin, Screen.width - width * 0.5f - margin);
+        y = Mathf.Clamp(y, height + margin, Screen.height - margin);
+
+        Rect rect = new Rect(x - width * 0.5f, y - height, width, height);
+        GUI.Box(rect, GUIContent.none, boxStyle);
+        GUI.Label(rect, prompt, textStyle);
     }
 
     private Texture2D MakeSolidTexture(Color color)
@@ -161,13 +282,5 @@ public class PlayerInteraction : MonoBehaviour
         texture.SetPixel(0, 0, color);
         texture.Apply();
         return texture;
-    }
-
-    private void OnDrawGizmosSelected()
-    {
-        if (interactionCamera == null) return;
-        Gizmos.color = Color.yellow;
-        Ray ray = interactionCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-        Gizmos.DrawRay(ray.origin, ray.direction * interactDistance);
     }
 }

@@ -17,7 +17,19 @@ public class WoodPileInteractable : MonoBehaviour, IInteractable
             return string.Empty;
         }
 
+        // Записка — первая задача утра: пока её не прочли, колода просто не предлагает взаимодействие.
+        if (!IsUnlocked())
+        {
+            return string.Empty;
+        }
+
         return s.CanAddFirewood ? "[E] Колоть полено" : "Лапы полны (до 3 поленьев)";
+    }
+
+    private static bool IsUnlocked()
+    {
+        DayLoopManager loop = DayLoopManager.Instance;
+        return loop == null || loop.IsMorningTaskUnlocked("chop_logs");
     }
 
     private FirewoodStorage Storage
@@ -45,6 +57,12 @@ public class WoodPileInteractable : MonoBehaviour, IInteractable
 
         if (!s.CanAddFirewood)
         {
+            return;
+        }
+
+        if (!IsUnlocked())
+        {
+            Debug.Log("[Snowpaw Station] Колоть дрова пока рано: сначала записка в доме.");
             return;
         }
 

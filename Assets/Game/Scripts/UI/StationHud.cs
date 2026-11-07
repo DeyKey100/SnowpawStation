@@ -221,14 +221,23 @@ public sealed class StationHud : MonoBehaviour
         {
             GUI.Label(new Rect(x, y, 420f, 26f), "Утро — до смены:", small);
             System.Collections.Generic.List<DayPlan.MorningTask> tasks = DayPlans.GetMorningTasks(dayLoopManager.CurrentDay);
+            int row = 0;
             for (int i = 0; i < tasks.Count; i++)
             {
                 bool done = dayLoopManager.GetTaskProgress(tasks[i].id) >= tasks[i].target;
+
+                // Закрытые задачи в списке не показываем: игрок видит только то, что уже доступно.
+                if (!done && !dayLoopManager.IsMorningTaskUnlocked(tasks[i].id))
+                {
+                    continue;
+                }
+
                 Color prev = GUI.color;
                 GUI.color = done ? new Color(0.55f, 0.85f, 0.55f) : Color.white;
-                GUI.Label(new Rect(x + 14f, y + 28f + i * 24f, 420f, 24f),
+                GUI.Label(new Rect(x + 14f, y + 28f + row * 24f, 460f, 24f),
                     (done ? "✓ " : "• ") + tasks[i].label, small);
                 GUI.color = prev;
+                row++;
             }
         }
         else if (dayLoopManager.CurrentState == DayLoopManager.DayState.WorkShift)

@@ -10,6 +10,9 @@ using UnityEngine.InputSystem;
 /// </summary>
 public class SceneDoorTrigger : MonoBehaviour
 {
+    /// <summary>Все двери в сцене: PlayerInteraction уступает им [E], если дверь ближе.</summary>
+    private static readonly System.Collections.Generic.List<SceneDoorTrigger> doors =
+        new System.Collections.Generic.List<SceneDoorTrigger>();
     [Header("Text")]
     [SerializeField] private string promptText = "E - войти";
     [SerializeField] private float plateWorldOffsetY = 0.35f;
@@ -48,10 +51,58 @@ public class SceneDoorTrigger : MonoBehaviour
     {
         plateBackground = MakeSolidTexture(new Color(0.02f, 0.03f, 0.04f, 0.82f));
         inputUnlockTime = Time.unscaledTime + inputLockDuration;
+        doors.Add(this);
+    }
+
+    private void OnEnable()
+    {
+        if (!doors.Contains(this))
+        {
+            doors.Add(this);
+        }
+    }
+
+    private void OnDisable()
+    {
+        doors.Remove(this);
+    }
+
+    /// <summary>Ближайшая к игроку дверь в радиусе (или null).</summary>
+    public static SceneDoorTrigger NearestInRange(Vector3 playerPosition, out float distance)
+    {
+        SceneDoorTrigger nearest = null;
+        distance = float.MaxValue;
+
+        for (int i = doors.Count - 1; i >= 0; i--)
+        {
+            SceneDoorTrigger door = doors[i];
+            if (door == null)
+            {
+                doors.RemoveAt(i);
+                continue;
+            }
+
+            if (!door.playerInRange)
+            {
+                continue;
+            }
+
+            Vector3 delta = playerPosition - door.transform.position;
+            float horizontal = new Vector2(delta.x, delta.z).magnitude;
+            if (horizontal < distance)
+            {
+                nearest = door;
+                distance = horizontal;
+            }
+        }
+
+        return nearest;
     }
 
     private void OnDestroy()
     {
+        doors.Remove(this);
+
         if (plateBackground != null)
         {
             Destroy(plateBackground);
@@ -84,11 +135,21 @@ public class SceneDoorTrigger : MonoBehaviour
             return;
         }
 
-        // У порога может лежать открытка/предмет: [E] сначала отдаём объекту под прицелом,
-        // иначе дверь «съедала» нажатие и увезла игрока в другую сцену.
-        if (InteractionLock.IsLocked || PlayerInteraction.HasFocusedInteractable)
+        // У порога может лежать открытка/записка: если предмет ближе, чем дверь,
+        // [E] отдаём ему. Если ближе дверь — открываемся (иначе плашка предмета
+        // «съедала» нажатие и дверь не работала вовсе).
+        if (InteractionLock.IsLocked)
         {
             return;
+        }
+
+        if (PlayerInteraction.Focused != null)
+        {
+            if (!PlayerInteraction.Focused.TryGetRange(playerTransform.position, out float markerDistance) ||
+                markerDistance < horizontalDistance)
+            {
+                return;
+            }
         }
 
         // Открытка ещё не подобрана — дверь не открывается.

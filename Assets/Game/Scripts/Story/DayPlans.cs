@@ -9,6 +9,12 @@ public class MorningTaskDef
     public string label;
     public int target = 1;
     public bool required = true;
+
+    /// <summary>
+    /// Задача-ключ: остальные дела утра открываются только после неё.
+    /// Так записка идёт первой, а дрова, печь и сугробы — уже после неё.
+    /// </summary>
+    public bool gate;
 }
 
 /// <summary>Сюжетный гость дня: заказ и расписание появления.</summary>
@@ -43,7 +49,9 @@ public static class DayPlans
 
     private static readonly List<MorningTaskDef> Day1Tasks = new List<MorningTaskDef>
     {
-        new MorningTaskDef { id = "note_read", label = "Осмотреть дом и найти записку" },
+        // Записка — первая и открывающая задача: пока её не прочли, дрова, печь и сугробы
+        // остаются закрытыми, иначе утро можно закрыть, не поняв, зачем всё это.
+        new MorningTaskDef { id = "note_read", label = "Найти и прочитать записку", gate = true },
         new MorningTaskDef { id = "chop_logs", label = "Нарубить поленья у колоды", target = 1 },
         new MorningTaskDef { id = "stove_lit", label = "Растопить печь" },
         new MorningTaskDef { id = "snow_door", label = "Расчистить сугроб у двери" },
@@ -137,6 +145,7 @@ public static class DayPlans
                 label = raw[i].label,
                 target = raw[i].target,
                 required = raw[i].required,
+                gate = raw[i].gate,
             });
         }
 
@@ -213,5 +222,8 @@ public static class DayPlan
         public string label;
         public int target = 1;
         public bool required = true;
+
+        /// <summary>Задача-ключ: без неё остальные утренние дела закрыты.</summary>
+        public bool gate;
     }
 }
