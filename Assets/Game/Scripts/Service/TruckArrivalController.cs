@@ -139,6 +139,7 @@ public sealed class TruckArrivalController : MonoBehaviour
         truck.name = "FirstOrderFuelTruck";
         ConfigureTruckModel();
         DisableEmbeddedCameras();
+        DisableEmbeddedLights();
 
         // Точку остановки считаем от реальных габаритов модели: меш внутри fbx смещён,
         // из-за жёсткой константы корпус вставал прямо в колонку.
@@ -247,6 +248,15 @@ public sealed class TruckArrivalController : MonoBehaviour
 
     }
 
+    private void DisableEmbeddedLights()
+    {
+        Light[] embeddedLights = truck.GetComponentsInChildren<Light>(true);
+        for (int i = 0; i < embeddedLights.Length; i++)
+        {
+            embeddedLights[i].enabled = false;
+        }
+    }
+
     private void ConfigureTruckModel()
     {
         Transform mesh = truck.Find("truck1");
@@ -254,6 +264,8 @@ public sealed class TruckArrivalController : MonoBehaviour
         {
             mesh.localPosition = TruckMeshLocalPosition;
         }
+
+        ConfigureTruckCollider();
 
         Transform embeddedCamera = truck.Find("Camera");
         if (embeddedCamera != null)
@@ -263,6 +275,63 @@ public sealed class TruckArrivalController : MonoBehaviour
             angles.y = EmbeddedCameraYaw;
             embeddedCamera.localEulerAngles = angles;
         }
+    }
+
+    private void ConfigureTruckCollider()
+    {
+        if (truck == null || truck.GetComponent<Collider>() != null)
+        {
+            return;
+        }
+
+        Renderer[] renderers = truck.GetComponentsInChildren<Renderer>(true);
+        bool found = false;
+        Bounds localBounds = default;
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (!(renderers[i] is MeshRenderer) || renderers[i].bounds.size.sqrMagnitude <= 0f)
+            {
+                continue;
+            }
+
+            Bounds worldBounds = renderers[i].bounds;
+            Vector3 min = worldBounds.min;
+            Vector3 max = worldBounds.max;
+            Vector3[] corners =
+            {
+                new Vector3(min.x, min.y, min.z),
+                new Vector3(min.x, min.y, max.z),
+                new Vector3(min.x, max.y, min.z),
+                new Vector3(min.x, max.y, max.z),
+                new Vector3(max.x, min.y, min.z),
+                new Vector3(max.x, min.y, max.z),
+                new Vector3(max.x, max.y, min.z),
+                new Vector3(max.x, max.y, max.z),
+            };
+
+            for (int cornerIndex = 0; cornerIndex < corners.Length; cornerIndex++)
+            {
+                Vector3 localPoint = truck.InverseTransformPoint(corners[cornerIndex]);
+                if (found)
+                {
+                    localBounds.Encapsulate(localPoint);
+                }
+                else
+                {
+                    localBounds = new Bounds(localPoint, Vector3.zero);
+                    found = true;
+                }
+            }
+        }
+
+        if (!found)
+        {
+            return;
+        }
+
+        BoxCollider collider = truck.gameObject.AddComponent<BoxCollider>();
+        collider.center = localBounds.center;
+        collider.size = localBounds.size;
     }
 
     private System.Collections.IEnumerator BeginAfterDelay(Transform pump, float delaySeconds, Action onArrived)

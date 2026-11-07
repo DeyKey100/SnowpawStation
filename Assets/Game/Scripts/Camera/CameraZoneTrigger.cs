@@ -1,41 +1,60 @@
 using Unity.Cinemachine;
 using UnityEngine;
 
-[RequireComponent(typeof(Collider))]
 public sealed class CameraZoneTrigger : MonoBehaviour
 {
-    [SerializeField] private CinemachineCamera zoneCamera;
-    [SerializeField] private CinemachineCamera defaultCamera;
-    [SerializeField] private string playerTag = "Player";
+    [Header("Runtime camera")]
+    [SerializeField] private GameObject zoneCameraPrefab;
+    [SerializeField] private CinemachineVirtualCamera zoneCamera;
+    [SerializeField] private CinemachineVirtualCamera defaultCamera;
     [SerializeField] private int activePriority = 20;
     [SerializeField] private int inactivePriority = 0;
+    [SerializeField] private int fallbackDefaultPriority = 10;
     [SerializeField] private bool restoreOnExit = true;
+    [SerializeField] private bool activateFromTrigger;
+    [SerializeField] private string playerTag = "Player";
 
     private Collider triggerCollider;
     private int defaultCameraPriority;
     private int zoneCameraPriority;
+    private bool dialogueSubscribed;
+    private bool triggerActive;
+    private bool stateActive = true;
 
     private void Awake()
     {
         triggerCollider = GetComponent<Collider>();
-        triggerCollider.isTrigger = true;
-
-        if (zoneCamera == null)
+        if (triggerCollider != null)
         {
-            zoneCamera = FindCamera("DialogueCamera");
+            triggerCollider.isTrigger = true;
+        }
+
+        if (GetComponent<Camera>() == null && zoneCamera == null)
+        {
+            enabled = false;
+            return;
         }
 
         if (defaultCamera == null)
         {
-            CinemachineCamera[] cameras = FindObjectsByType<CinemachineCamera>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            foreach (CinemachineCamera camera in cameras)
-            {
-                if (camera != zoneCamera)
-                {
-                    defaultCamera = camera;
-                    break;
-                }
-            }
+            defaultCamera = FindDefaultCamera();
+        }
+
+        if (zoneCamera == null)
+        {
+            zoneCamera = FindZoneCamera();
+        }
+
+        if (defaultCamera == zoneCamera)
+        {
+            defaultCamera = FindDefaultCamera(zoneCamera);
+        }
+
+        if (zoneCamera == null && zoneCameraPrefab != null)
+        {
+            GameObject cameraObject = Instantiate(zoneCameraPrefab);
+            cameraObject.name = zoneCameraPrefab.name;
+            zoneCamera = cameraObject.GetComponent<CinemachineVirtualCamera>();
         }
 
         if (zoneCamera == null || defaultCamera == null)
@@ -48,7 +67,82 @@ public sealed class CameraZoneTrigger : MonoBehaviour
         zoneCamera.Follow = defaultCamera.Follow;
         zoneCamera.LookAt = defaultCamera.LookAt;
         defaultCameraPriority = defaultCamera.Priority.Value;
+        if (defaultCameraPriority <= inactivePriority)
+        {
+            defaultCameraPriority = fallbackDefaultPriority;
+        }
+
         zoneCameraPriority = zoneCamera.Priority.Value;
+        SetCameraActive(false);
+    }
+
+    private void OnEnable()
+    {
+        PlayerControlLock.LockStateChanged += OnControlLockChanged;
+    }
+
+    private void Update()
+    {
+        RefreshState();
+
+        if (!dialogueSubscribed && DialogueManager.Instance != null)
+        {
+            DialogueManager.Instance.DialogueStarted += OnDialogueStarted;
+            DialogueManager.Instance.DialogueFinished += OnDialogueFinished;
+            dialogueSubscribed = true;
+            RefreshState();
+        }
+    }
+
+    private void OnDisable()
+    {
+        PlayerControlLock.LockStateChanged -= OnControlLockChanged;
+        UnsubscribeDialogue();
+    }
+
+    private void OnDestroy()
+    {
+        UnsubscribeDialogue();
+    }
+
+    private void OnDialogueStarted(DialogueScript script)
+    {
+        RefreshState();
+    }
+
+    private void OnDialogueFinished(DialogueScript script)
+    {
+        RefreshState();
+    }
+
+    private void OnControlLockChanged(bool locked)
+    {
+        RefreshState();
+    }
+
+    private void RefreshState()
+    {
+        bool active = (DialogueManager.IsActive || PlayerControlLock.IsLocked) ||
+                      (activateFromTrigger && triggerActive);
+        SetCameraActive(active);
+    }
+
+    private void SetCameraActive(bool active)
+    {
+        if (zoneCamera == null || defaultCamera == null || stateActive == active)
+        {
+            return;
+        }
+
+        stateActive = active;
+        defaultCamera.Priority = new PrioritySettings
+        {
+            Value = active ? inactivePriority : defaultCameraPriority
+        };
+        zoneCamera.Priority = new PrioritySettings
+        {
+            Value = active ? activePriority : zoneCameraPriority
+        };
     }
 
     private void OnTriggerEnter(Collider other)
@@ -58,8 +152,8 @@ public sealed class CameraZoneTrigger : MonoBehaviour
             return;
         }
 
-        defaultCamera.Priority = new PrioritySettings { Value = inactivePriority };
-        zoneCamera.Priority = new PrioritySettings { Value = activePriority };
+        triggerActive = true;
+        RefreshState();
     }
 
     private void OnTriggerExit(Collider other)
@@ -69,13 +163,61 @@ public sealed class CameraZoneTrigger : MonoBehaviour
             return;
         }
 
-        defaultCamera.Priority = new PrioritySettings { Value = defaultCameraPriority };
-        zoneCamera.Priority = new PrioritySettings { Value = zoneCameraPriority };
+        triggerActive = false;
+        RefreshState();
     }
 
-    private static CinemachineCamera FindCamera(string cameraName)
+    private void UnsubscribeDialogue()
     {
-        GameObject cameraObject = GameObject.Find(cameraName);
-        return cameraObject == null ? null : cameraObject.GetComponent<CinemachineCamera>();
+        if (!dialogueSubscribed || DialogueManager.Instance == null)
+        {
+            dialogueSubscribed = false;
+            return;
+        }
+
+        DialogueManager.Instance.DialogueStarted -= OnDialogueStarted;
+        DialogueManager.Instance.DialogueFinished -= OnDialogueFinished;
+        dialogueSubscribed = false;
+    }
+
+    private static CinemachineVirtualCamera FindDefaultCamera(
+        CinemachineVirtualCamera excluded = null)
+    {
+        CinemachineVirtualCamera[] cameras = FindObjectsByType<CinemachineVirtualCamera>(
+            FindObjectsInactive.Include, FindObjectsSortMode.None);
+        CinemachineVirtualCamera result = null;
+        for (int i = 0; i < cameras.Length; i++)
+        {
+            CinemachineVirtualCamera candidate = cameras[i];
+            if (candidate == null || candidate == excluded ||
+                candidate.GetComponent<CameraZoneTrigger>() != null ||
+                candidate.name.Contains("Dialogue"))
+            {
+                continue;
+            }
+
+            if (result == null || candidate.Priority.Value > result.Priority.Value)
+            {
+                result = candidate;
+            }
+        }
+
+        return result;
+    }
+
+    private static CinemachineVirtualCamera FindZoneCamera()
+    {
+        CinemachineVirtualCamera[] cameras = FindObjectsByType<CinemachineVirtualCamera>(
+            FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < cameras.Length; i++)
+        {
+            CinemachineVirtualCamera candidate = cameras[i];
+            if (candidate != null && candidate.name.Contains("Dialogue"))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 }

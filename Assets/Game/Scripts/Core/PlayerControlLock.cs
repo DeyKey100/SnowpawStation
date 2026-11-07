@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 /// <summary>
@@ -10,6 +11,8 @@ public static class PlayerControlLock
 {
     private static readonly HashSet<string> Holders = new HashSet<string>();
 
+    public static event Action<bool> LockStateChanged;
+
     /// <summary>Управление заморожено (хотя бы один держатель).</summary>
     public static bool IsLocked => Holders.Count > 0;
 
@@ -21,18 +24,30 @@ public static class PlayerControlLock
             return;
         }
 
-        Holders.Add(holder);
+        if (Holders.Add(holder))
+        {
+            LockStateChanged?.Invoke(true);
+        }
     }
 
     /// <summary>Снять держателя. Снятие незанятого id — без эффекта.</summary>
     public static void Remove(string holder)
     {
-        Holders.Remove(holder);
+        if (Holders.Remove(holder) && Holders.Count == 0)
+        {
+            LockStateChanged?.Invoke(false);
+        }
     }
 
     /// <summary>Аварийное снятие всех держателей (смена дня, чтобы не остаться замороженным).</summary>
     public static void Reset()
     {
+        if (Holders.Count == 0)
+        {
+            return;
+        }
+
         Holders.Clear();
+        LockStateChanged?.Invoke(false);
     }
 }

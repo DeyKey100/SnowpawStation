@@ -55,12 +55,15 @@ MonoBehaviour:
   m_GameObject: {fileID: 6000000000000000001}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6b0dc5d1f6c1491893eaf350dbd7e8d0, type: 3}
+  m_Script: {fileID: 11500000, guid: 9ec64222096473640802dd745162b89d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  zoneCameraPrefab: {fileID: 2070925441746177671, guid: c6880d22772442c2a5000d4802878b94, type: 3}
   zoneCamera: {fileID: 0}
   defaultCamera: {fileID: 0}
   playerTag: Player
   activePriority: 20
   inactivePriority: 0
+  fallbackDefaultPriority: 10
   restoreOnExit: 1
+  activateFromTrigger: 0

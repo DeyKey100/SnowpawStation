@@ -13,6 +13,15 @@ public class NPCInteractable : MonoBehaviour, IInteractable
 
     public void Interact()
     {
-        Debug.Log($"[{npcName}]: {dialogueText}");
+        DialogueManager dialogue = DialogueManager.Instance;
+        if (dialogue == null)
+        {
+            Debug.LogError("NPCInteractable: DialogueManager не найден.", this);
+            return;
+        }
+
+        DialogueScript script = DialogueBuilder.Create($"npc_{name}", npcName)
+            .Say(npcName, dialogueText);
+        dialogue.Show(script);
     }
 }
