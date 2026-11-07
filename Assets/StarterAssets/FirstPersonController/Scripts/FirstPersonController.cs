@@ -40,16 +40,8 @@ namespace StarterAssets
 		[Header("Cinemachine")]
 		[Tooltip("The follow target set in the Cinemachine Virtual Camera that the camera will follow")]
 		public GameObject CinemachineCameraTarget;
-		[Tooltip("Верхняя граница наклона камеры, градусы. Больше наклон — камера выше и смотрит круче вниз")]
-		public float TopClamp = 50.0f;
-		[Tooltip("Нижняя граница наклона камеры, градусы")]
-		public float BottomClamp = 40.0f;
-		[Tooltip("Наклон камеры при старте: 45° — взгляд сверху вниз под сорок пять градусов")]
-		public float StartPitch = 45.0f;
-		[Tooltip("Базовый азимут камеры: 225° — камера стоит по диагонали между осями X и Z, напротив направления 45°")]
-		public float CameraYawBase = 225.0f;
-		[Tooltip("Допуск поворота по горизонтали, градусы в обе стороны от базового азимута")]
-		public float CameraYawTolerance = 10.0f;
+		[Tooltip("Maximum camera pitch magnitude. Keeps the camera from flipping upside down.")]
+		public float CameraPitchLimit = 89.0f;
 
 		// cinemachine
 		private float _cinemachineTargetPitch;
@@ -108,11 +100,10 @@ namespace StarterAssets
 			// reset our timeout on start
 			_fallTimeoutDelta = FallTimeout;
 
-			// Камера стартует в своём коридоре: базовый азимут и наклон 45°.
-			// Без этого игрок при первом же движении мыши «прыгнул» бы из текущего
-			// поворота объекта в базовый.
-			CameraYawBase = NormalizeAngle(CameraYawBase);
-			RestoreCameraCorridor();
+			_cameraYaw = transform.eulerAngles.y;
+			_cinemachineTargetPitch = CinemachineCameraTarget == null
+				? 0.0f
+				: NormalizeAngle(CinemachineCameraTarget.transform.localEulerAngles.x);
 		}
 
 		private void Update()
@@ -145,8 +136,6 @@ namespace StarterAssets
 
 		private void CameraRotation()
 		{
-			// Вращение ограничено: камера стоит по диагонали между осями X и Z,
-			// и мышь двигает её только в пределах небольшого допуска в обе стороны.
 			if (_input.look.sqrMagnitude >= _threshold)
 			{
 				//Don't multiply mouse input by Time.deltaTime
@@ -155,20 +144,15 @@ namespace StarterAssets
 				_cinemachineTargetPitch += _input.look.y * RotationSpeed * deltaTimeMultiplier;
 				_rotationVelocity = _input.look.x * RotationSpeed * deltaTimeMultiplier;
 
-				// clamp our pitch rotation
-				_cinemachineTargetPitch = ClampAngle(_cinemachineTargetPitch, BottomClamp, TopClamp);
+				_cinemachineTargetPitch = Mathf.Clamp(
+					_cinemachineTargetPitch,
+					-CameraPitchLimit,
+					CameraPitchLimit);
 
 				// Update Cinemachine camera target pitch
 				CinemachineCameraTarget.transform.localRotation = Quaternion.Euler(_cinemachineTargetPitch, 0.0f, 0.0f);
 
-				// Азимут копим отдельно и зажимаем в коридоре вокруг базового угла.
-				// Считаем через Mathf.DeltaAngle: прямой Clamp по градусам ломается,
-				// когда коридор переходит через ±180 (например, база 180°).
-				float yawOffset = Mathf.DeltaAngle(CameraYawBase, _cameraYaw + _rotationVelocity);
-				yawOffset = Mathf.Clamp(yawOffset, -CameraYawTolerance, CameraYawTolerance);
-				_cameraYaw = NormalizeAngle(CameraYawBase + yawOffset);
-
-				// rotate the player left and right
+				_cameraYaw += _rotationVelocity;
 				transform.rotation = Quaternion.Euler(0.0f, _cameraYaw, 0.0f);
 			}
 		}
@@ -195,19 +179,18 @@ namespace StarterAssets
 		/// <summary>Снимок текущего положения камеры для восстановления после смены сцены.</summary>
 		public CameraFacing CaptureFacing()
 		{
-			return new CameraFacing(CameraYawBase, Mathf.DeltaAngle(CameraYawBase, _cameraYaw), _cinemachineTargetPitch);
+			return new CameraFacing(_cameraYaw, 0.0f, _cinemachineTargetPitch);
 		}
 
 		/// <summary>Восстанавливает снимок камеры, сделанный до перехода в другую сцену.</summary>
 		public void ApplyFacing(CameraFacing facing)
 		{
-			CameraYawBase = NormalizeAngle(facing.BaseYaw);
-			_cameraYaw = NormalizeAngle(CameraYawBase + facing.YawOffset);
+			_cameraYaw = NormalizeAngle(facing.BaseYaw + facing.YawOffset);
 			transform.rotation = Quaternion.Euler(0.0f, _cameraYaw, 0.0f);
 
 			if (CinemachineCameraTarget != null)
 			{
-				_cinemachineTargetPitch = ClampAngle(facing.Pitch, BottomClamp, TopClamp);
+				_cinemachineTargetPitch = Mathf.Clamp(facing.Pitch, -CameraPitchLimit, CameraPitchLimit);
 				CinemachineCameraTarget.transform.localRotation = Quaternion.Euler(_cinemachineTargetPitch, 0.0f, 0.0f);
 			}
 		}
@@ -219,10 +202,8 @@ namespace StarterAssets
 		/// </summary>
 		public void SetFacingYaw(float yaw)
 		{
-			// Диагонали — это 45°, 135°, 225°, 315°. Берём ту, что ближе к желаемому углу.
-			float nearest = Mathf.Round((NormalizeAngle(yaw) - 45f) / 90f) * 90f + 45f;
-			CameraYawBase = NormalizeAngle(nearest);
-			RestoreCameraCorridor();
+			_cameraYaw = NormalizeAngle(yaw);
+			transform.rotation = Quaternion.Euler(0.0f, _cameraYaw, 0.0f);
 		}
 
 		/// <summary>
@@ -232,12 +213,12 @@ namespace StarterAssets
 		/// </summary>
 		public void RestoreCameraCorridor()
 		{
-			_cameraYaw = CameraYawBase;
+			_cameraYaw = transform.eulerAngles.y;
 			transform.rotation = Quaternion.Euler(0.0f, _cameraYaw, 0.0f);
 
 			if (CinemachineCameraTarget != null)
 			{
-				_cinemachineTargetPitch = ClampAngle(StartPitch, BottomClamp, TopClamp);
+				_cinemachineTargetPitch = Mathf.Clamp(_cinemachineTargetPitch, -CameraPitchLimit, CameraPitchLimit);
 				CinemachineCameraTarget.transform.localRotation = Quaternion.Euler(_cinemachineTargetPitch, 0.0f, 0.0f);
 			}
 		}

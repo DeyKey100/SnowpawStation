@@ -7,8 +7,8 @@ using UnityEngine.InputSystem;
 /// Колонка. E — начать отпуск топлива по текущему заказу, затем зажать ЛКМ:
 /// литры растут ~8 л/с, отпустить означает сдачу заказа с оценкой объёма.
 /// Подсказка появляется только у той колонки, к которой подъехал посетитель:
-/// пустые колонки молчат. На время заправки вешаются InteractionLock и
-/// PlayerControlLock "refuel" — игрок стоит на месте, камера не крутится.
+/// пустые колонки молчат. PlayerControlLock "refuel" включается только пока
+/// игрок зажимает ЛКМ, поэтому до начала подачи топлива можно свободно подойти.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
@@ -85,14 +85,8 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
         poured = 0f;
         armedTimer = 0f;
         truckArrival = FindAnyObjectByType<TruckArrivalController>();
-        InteractionLock.Add("refuel");
-
-        // Пока идёт отпуск топлива, игрок стоит у колонки: движение и камера заморожены.
-        PlayerControlLock.Add("refuel");
         Debug.Log("[Snowpaw Station] Заправка начата: зажмите ЛКМ.");
     }
-
-    private void OnDisable() => HideHose();
 
     private void Update()
     {
@@ -113,6 +107,13 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
 
         if (hold)
         {
+            if (armed)
+            {
+                InteractionLock.Add("refuel");
+                // Игрок не двигается только во время фактической подачи топлива.
+                PlayerControlLock.Add("refuel");
+            }
+
             armed = false; // игрок реально начал качать
             ServiceDirector s = Service;
             float target = s != null && s.CurrentOrder != null ? s.CurrentOrder.liters : 0f;
@@ -254,7 +255,7 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
 
         fueling = false;
         armed = false;
-        InteractionLock.Remove("refuel");
+        ReleaseLocks();
         Service.OnFuelDelivered(poured);
     }
 
@@ -267,6 +268,8 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
 
     private void OnDisable()
     {
+        HideHose();
+
         // Сцену выгрузили или объект выключили посреди заправки — иначе игрок
         // остался бы замороженным навсегда.
         if (fueling)

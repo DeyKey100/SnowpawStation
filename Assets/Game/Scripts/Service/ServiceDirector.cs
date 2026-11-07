@@ -61,9 +61,6 @@ public sealed class ServiceDirector : MonoBehaviour
     private readonly List<GameObject> runtimePumps = new List<GameObject>();
     private readonly List<GameObject> runtimeShop = new List<GameObject>();
 
-    /// <summary>Заглушка машины текущего посетителя (вытянутый куб у его колонки).</summary>
-    private VisitorCarPlaceholder visitorCar;
-
     public static ServiceDirector Instance { get; private set; }
 
     public event System.Action<Order> OrderChanged;
@@ -87,7 +84,6 @@ public sealed class ServiceDirector : MonoBehaviour
     private void OnDestroy()
     {
         Instance = null;
-        DespawnVisitorCar();
         if (DayLoopManager.Instance != null)
         {
             DayLoopManager.Instance.PhaseChanged -= OnPhaseChanged;
@@ -104,15 +100,12 @@ public sealed class ServiceDirector : MonoBehaviour
         EnsurePumps(scene);
         EnsureShop(scene);
 
-        // Машина живёт в сцене двора: после похода в магазин за товаром (Котлета просит кофе)
-        // она уничтожается вместе со сценой, а заказ ещё активен — ставим её обратно к колонке.
-        if (CurrentOrder != null && !scene.name.ToLowerInvariant().Contains("interior"))
+        if (CurrentOrder != null &&
+            !scene.name.ToLowerInvariant().Contains("interior") &&
+            truckArrival != null &&
+            !truckArrival.IsActive)
         {
-            GameObject existing = GameObject.Find("VisitorCar");
-            if (existing == null)
-            {
-                SpawnVisitorCar(CurrentOrder);
-            }
+            StartTruckArrival(CurrentOrder);
         }
     }
 
@@ -138,14 +131,20 @@ public sealed class ServiceDirector : MonoBehaviour
             CurrentState = "evening";
             CurrentOrder = null;
             CarriedGood = null;
-            DespawnVisitorCar();
+            if (truckArrival != null && truckArrival.IsActive)
+            {
+                truckArrival.Depart();
+            }
             OrderChanged?.Invoke(null);
         }
         else if (state == DayLoopManager.DayState.Morning)
         {
             CurrentState = "morning";
             CurrentOrder = null;
-            DespawnVisitorCar();
+            if (truckArrival != null && truckArrival.IsActive)
+            {
+                truckArrival.Depart();
+            }
             OrderChanged?.Invoke(null);
         }
     }
@@ -253,95 +252,33 @@ public sealed class ServiceDirector : MonoBehaviour
         if (CurrentOrder != null)
         {
             Debug.Log($"[Snowpaw Station] Заказ: {CurrentOrder.displayName} — {CurrentOrder.liters:0} л{(CurrentOrder.item != null ? $", {Goods.DisplayName(CurrentOrder.item)}" : "")}.");
-            SpawnVisitorCar(CurrentOrder);
             OrderChanged?.Invoke(CurrentOrder);
-            if (!StartFirstTruckArrival(CurrentOrder))
-            {
-                ShowGreeting(CurrentOrder);
-            }
-        }
-        else
-        {
-            DespawnVisitorCar();
+            StartTruckArrival(CurrentOrder);
         }
     }
 
-    // ================= ЗАГЛУШКА МАШИНЫ =================
-
-    /// <summary>Поставить вытянутый куб у колонки, к которой встал посетитель.</summary>
-    private void SpawnVisitorCar(Order order)
+    private void StartTruckArrival(Order order)
     {
-        DespawnVisitorCar();
-
-        int pumpNumber = order.pumpIndex + 1;
-        if (!TryGetPumpPosition(pumpNumber, out Vector3 pumpPosition))
-        {
-            return;
-        }
-
-        // Машина встаёт с внешней стороны островка: у левых колонок — налево по X,
-        // у правых — направо, иначе она оказалась бы между колонками.
-        float side = pumpPosition.x < 0f ? -1f : 1f;
-        visitorCar = VisitorCarPlaceholder.Spawn(pumpPosition, side);
-    }
-
-    private void DespawnVisitorCar()
-    {
-        if (visitorCar != null)
-        {
-            Destroy(visitorCar.gameObject);
-            visitorCar = null;
-        }
-    }
-
-    /// <summary>Позиция колонки по её номеру (1..4): из сцены, иначе из таблицы.</summary>
-    private bool TryGetPumpPosition(int pumpNumber, out Vector3 position)
-    {
-        int index = pumpNumber - 1;
-        if (index < 0 || index >= FallbackPumpPositions.Length)
-        {
-            position = Vector3.zero;
-            return false;
-        }
-
-        List<GameObject> pumps = FindScenePumps();
-        pumps.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
-        for (int i = 0; i < pumps.Count; i++)
-        {
-            FuelPumpInteractable fuel = pumps[i].GetComponent<FuelPumpInteractable>();
-            if (fuel != null && fuel.PumpIndex == pumpNumber)
-            {
-                position = pumps[i].transform.position;
-                return true;
-            }
-        }
-
-        position = FallbackPumpPositions[index];
-        return true;
-    }
-
-    private bool StartFirstTruckArrival(Order order)
-    {
-        const string eventId = "first_order_truck_arrival";
-        if (GameState.IsDayEventDone(eventId))
-        {
-            return false;
-        }
-
         Transform pump = FindPump(order.pumpIndex);
         if (pump == null)
         {
             Debug.LogError($"[Snowpaw Station] Не найдена колонка №{order.pumpIndex + 1} для подъезда трака.");
-            return false;
+            ShowGreeting(order);
+            return;
         }
 
-        if (truckArrival.BeginDelayed(pump, 3.5f, () => ShowGreeting(order)))
+        if (truckArrival.BeginDelayed(pump, 3.5f, () =>
         {
-            GameState.MarkDayEventOnce(eventId);
-            return true;
+            if (!fuelDeliveredForCurrentOrder)
+            {
+                ShowGreeting(order);
+            }
+        }))
+        {
+            return;
         }
 
-        return false;
+        ShowGreeting(order);
     }
 
     private void ShowGreeting(Order order)
@@ -399,10 +336,6 @@ public sealed class ServiceDirector : MonoBehaviour
         // Клиент, который просит ещё и товар (Дядя Котлета — кофе), остаётся у колонки:
         // машина уезжает только после выдачи товара, в CompleteOrder.
         bool awaitsItem = order.isGuest && !string.IsNullOrEmpty(order.item);
-        if (!awaitsItem)
-        {
-            DespawnVisitorCar();
-        }
 
         if (awaitsItem)
         {
@@ -509,9 +442,6 @@ public sealed class ServiceDirector : MonoBehaviour
             queue.RemoveAt(0);
         }
 
-        // Заглушка машины не должна переживать свой заказ.
-        DespawnVisitorCar();
-
         if (done.isGuest)
         {
             DayLoopManager.Instance.NotifyGuestServed(done.id);
@@ -525,9 +455,12 @@ public sealed class ServiceDirector : MonoBehaviour
         {
             if (truckArrival != null && truckArrival.IsActive)
             {
-                truckArrival.Depart();
+                truckArrival.Depart(NextOrder);
             }
-            NextOrder();
+            else
+            {
+                NextOrder();
+            }
         }
     }
 

@@ -228,11 +228,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 1
   CinemachineCameraTarget: {fileID: 4135013735270702863}
-  TopClamp: 50
-  BottomClamp: 40
-  StartPitch: 45
-  CameraYawBase: 225
-  CameraYawTolerance: 10
+  CameraPitchLimit: 89
 --- !u!114 &1978471637655604388
 MonoBehaviour:
   m_ObjectHideFlags: 0

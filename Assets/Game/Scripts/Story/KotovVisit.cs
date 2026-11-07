@@ -23,6 +23,7 @@ public sealed class KotovVisit : MonoBehaviour
     private bool broken;
     private int visitDay;
     private GameObject doorstepLetter;
+    private bool pendingDoorstepLetter;
 
     /// <summary>Вечер наступил в интерьере: визит ждёт, пока игрок выйдет на улицу.</summary>
     private int pendingVisitDay;
@@ -50,6 +51,7 @@ public sealed class KotovVisit : MonoBehaviour
         broken = false;
         lookedAwayTimer = 0f;
         pendingVisitDay = 0;
+        pendingDoorstepLetter = false;
     }
 
     private void OnAnyDialogueFinished(DialogueScript finished)
@@ -115,11 +117,12 @@ public sealed class KotovVisit : MonoBehaviour
     /// <summary>Точка Котова: крыльцо станции (дверь), иначе позиция игрока минус вперёд.</summary>
     private Transform ResolveAnchor()
     {
-        // Ищем дверь в текущей (активной) сцене, а не в DontDestroyOnLoad.
+        // Ищем дверь только в наружной сцене: интерьерная дверь не является
+        // местом встречи с Котовым и не должна использоваться для письма.
         for (int s = 0; s < UnityEngine.SceneManagement.SceneManager.sceneCount; s++)
         {
             var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(s);
-            if (!scene.IsValid() || !scene.isLoaded)
+            if (!scene.IsValid() || !scene.isLoaded || scene.name.ToLowerInvariant().Contains("interior"))
             {
                 continue;
             }
@@ -168,6 +171,7 @@ public sealed class KotovVisit : MonoBehaviour
     private void Update()
     {
         TryStartPendingVisit();
+        TrySpawnPendingDoorstepLetter();
 
         // Следим за взглядом только пока идёт СВОЙ диалог: иначе «отвести взгляд»
         // обрывало чужую реплику (котлета_farewell), а визит при этом терялся.
@@ -292,7 +296,22 @@ public sealed class KotovVisit : MonoBehaviour
             return;
         }
 
-        Vector3 pos = kotovAnchor != null ? kotovAnchor.position : Vector3.zero;
+        if (!IsPlayerOutdoors)
+        {
+            pendingDoorstepLetter = true;
+            Debug.Log("[Snowpaw Station] Письмо Котова отложено до выхода на улицу.");
+            return;
+        }
+
+        pendingDoorstepLetter = false;
+        Transform outdoorDoor = ResolveAnchor();
+        if (outdoorDoor == null)
+        {
+            Debug.LogError("[Snowpaw Station] Не найдена наружная дверь для письма Котова.");
+            return;
+        }
+
+        Vector3 pos = outdoorDoor.position;
 
         // Отодвигаем от полотна двери: иначе луч прицела упирается в дверь, а не в открытку.
         Camera cam = Camera.main;
@@ -309,8 +328,9 @@ public sealed class KotovVisit : MonoBehaviour
         GameObject letter = GameObject.CreatePrimitive(PrimitiveType.Cube);
         letter.name = "DoorstepLetter";
         letter.transform.SetParent(null);
-        // Точка сцены: x = 0, y = 0, z — от порога.
-        letter.transform.position = new Vector3(0f, 0f, pos.z);
+        // Письмо лежит у наружного порога; сохраняем координаты найденной двери,
+        // иначе оно возвращается в старую точку x = 0 внутри двора.
+        letter.transform.position = new Vector3(pos.x, 0f, pos.z);
         letter.transform.localScale = new Vector3(0.3f, 0.04f, 0.22f);
         letter.transform.rotation = Quaternion.Euler(0f, 25f, 0f);
         letter.layer = LayerMask.NameToLayer("Interactable");
@@ -319,6 +339,28 @@ public sealed class KotovVisit : MonoBehaviour
         pickup.Setup(visitDay);
         ProximityInteractable.EnsureOn(letter, 2.4f);
         doorstepLetter = letter;
+    }
+
+    /// <summary>Котов оставляет письмо сразу после отказа зайти в станцию.</summary>
+    public void LeaveLetterAfterDecline()
+    {
+        if (State != VisitState.InProgress || GameState.HasLetter(visitDay))
+        {
+            return;
+        }
+
+        SpawnDoorstepLetter();
+        Debug.Log("[Snowpaw Station] Котов оставил письмо у наружного порога.");
+    }
+
+    private void TrySpawnPendingDoorstepLetter()
+    {
+        if (!pendingDoorstepLetter || doorstepLetter != null || !IsPlayerOutdoors)
+        {
+            return;
+        }
+
+        SpawnDoorstepLetter();
     }
 
     /// <summary>Открытка лежит на пороге и ещё не подобрана (дверь в это время молчит).</summary>

@@ -57,7 +57,7 @@ public sealed class TruckArrivalController : MonoBehaviour
         Leaving,
     }
 
-    public bool IsActive => motion != Motion.None;
+    public bool IsActive => motion != Motion.None && truck != null;
 
     /// <summary>Стоящий у колонки трак (null — трака на месте нет).</summary>
     public bool IsParked => motion == Motion.Parked && truck != null;
