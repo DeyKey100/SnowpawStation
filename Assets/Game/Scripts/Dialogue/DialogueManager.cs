@@ -223,7 +223,7 @@ public sealed class DialogueManager : MonoBehaviour
         DialogueScript finished = script;
         script = null;
         entryIndex = 0;
-        InteractionLock.Remove("dialogue");
+        StartCoroutine(RemoveLockNextFrame());
 
         DialogueFinished?.Invoke(finished);
         onFinished?.Invoke();
@@ -247,6 +247,12 @@ public sealed class DialogueManager : MonoBehaviour
             InteractionLock.Add("dialogue");
             DialogueStarted?.Invoke(script);
         }
+    }
+
+    private System.Collections.IEnumerator RemoveLockNextFrame()
+    {
+        yield return null; // Ждем 1 кадр, пока "сгорит" нажатие E
+        InteractionLock.Remove("dialogue");
     }
 
     private void OnGUI()
