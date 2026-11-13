@@ -27,8 +27,6 @@ public sealed class TruckArrivalController : MonoBehaviour
     private const float CameraHeight = 6.5f;
     private const float CameraSideOffset = 1.5f;
     private const float CameraLookHeight = 1.2f;
-    private const float ParkingSideOffset = 1.8f;
-    private const float ParkingForwardOffset = 2.2f;
     private static readonly Vector3 TruckMeshLocalPosition = new Vector3(-0.47f, 0.5f, 2.6f);
     private static readonly Vector3 EmbeddedCameraLocalPosition = new Vector3(-7.3298f, 3.5f, 6.88517f);
     private const float EmbeddedCameraYaw = 125f;
@@ -43,11 +41,8 @@ public sealed class TruckArrivalController : MonoBehaviour
     private Action departed;
     private Motion motion;
     private Camera sceneCamera;
-    private Vector3 previousCameraPosition;
-    private Quaternion previousCameraRotation;
     private Behaviour cameraBrain;
     private Vector3 travelForward;
-    private Coroutine delayedArrival;
 
     private enum Motion
     {
@@ -102,17 +97,6 @@ public sealed class TruckArrivalController : MonoBehaviour
         return true;
     }
 
-    public bool BeginDelayed(Transform pump, float delaySeconds, Action onArrived)
-    {
-        if (IsActive || delayedArrival != null || pump == null)
-        {
-            return false;
-        }
-
-        delayedArrival = StartCoroutine(BeginAfterDelay(pump, delaySeconds, onArrived));
-        return true;
-    }
-
     public bool Begin(Transform pump, Action onArrived, Action onDeparted = null)
     {
         if (IsActive || pump == null)
@@ -152,6 +136,61 @@ public sealed class TruckArrivalController : MonoBehaviour
         InteractionLock.Add("truck_arrival");
         motion = Motion.Arriving;
         Debug.Log($"[Snowpaw Station] Трак подъезжает к первой колонке. Точка остановки: {approachPoint}.");
+        return true;
+    }
+
+    /// <summary>Полностью сбросить и убрать текущую машину (при смене сцены или сбросе смены).</summary>
+    public void CancelArrival()
+    {
+        arrived = null;
+        departed = null;
+
+        if (truck != null)
+        {
+            Destroy(truck.gameObject);
+            truck = null;
+        }
+
+        RestoreCameraTarget();
+        InteractionLock.Remove("truck_arrival");
+        motion = Motion.None;
+    }
+
+    /// <summary>Мгновенно ставит трак у колонки (если игрок заходил в магазин и вернулся).</summary>
+    public bool SpawnParked(Transform pump)
+    {
+        if (pump == null)
+        {
+            return false;
+        }
+
+        CancelArrival();
+
+        GameObject model = LoadTruckModel();
+        if (model == null)
+        {
+            Debug.LogError($"[Snowpaw Station] Не удалось загрузить модель трака: {TruckAssetPath}.");
+            return false;
+        }
+
+        travelForward = pump.forward;
+        travelForward.y = 0f;
+        travelForward = travelForward.sqrMagnitude > 0.01f ? travelForward.normalized : Vector3.forward;
+
+        Quaternion travelRotation = Quaternion.LookRotation(travelForward, Vector3.up)
+            * Quaternion.Euler(0f, ModelYawOffset, 0f);
+        truck = Instantiate(model, Vector3.zero, travelRotation).transform;
+        truck.name = "FirstOrderFuelTruck";
+        ConfigureTruckModel();
+        DisableEmbeddedCameras();
+        DisableEmbeddedLights();
+
+        approachPoint = ComputeApproachPoint(pump, travelForward);
+        exitPoint = approachPoint - travelForward * StartDistance;
+        leavePoint = approachPoint + travelForward * DepartDistance;
+
+        truck.position = approachPoint;
+        motion = Motion.Parked;
         return true;
     }
 
@@ -335,13 +374,6 @@ public sealed class TruckArrivalController : MonoBehaviour
         collider.size = localBounds.size;
     }
 
-    private System.Collections.IEnumerator BeginAfterDelay(Transform pump, float delaySeconds, Action onArrived)
-    {
-        yield return new WaitForSeconds(delaySeconds);
-        delayedArrival = null;
-        Begin(pump, onArrived);
-    }
-
     public void Depart(Action onDeparted = null)
     {
         if (truck == null)
@@ -357,8 +389,28 @@ public sealed class TruckArrivalController : MonoBehaviour
 
     private void Update()
     {
-        if (motion == Motion.None || truck == null)
+        if (motion == Motion.None)
         {
+            return;
+        }
+
+        if (truck == null)
+        {
+            if (motion == Motion.Leaving)
+            {
+                motion = Motion.None;
+                RestoreCameraTarget();
+                Action dep = departed;
+                departed = null;
+                dep?.Invoke();
+            }
+            else if (motion == Motion.Arriving)
+            {
+                motion = Motion.None;
+                RestoreCameraTarget();
+                InteractionLock.Remove("truck_arrival");
+                arrived = null;
+            }
             return;
         }
 
@@ -418,8 +470,6 @@ public sealed class TruckArrivalController : MonoBehaviour
             return;
         }
 
-        previousCameraPosition = sceneCamera.transform.position;
-        previousCameraRotation = sceneCamera.transform.rotation;
         cameraBrain = sceneCamera.GetComponent("CinemachineBrain") as Behaviour;
         if (cameraBrain != null)
         {
