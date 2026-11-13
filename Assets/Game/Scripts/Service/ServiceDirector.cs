@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public enum FuelResult { Underfilled, Accepted, Perfect, Overfilled }
+public enum OrderStage { None, Arriving, Refueling, AwaitingItem, Departing }
 
 /// <summary>
 /// Рабочая смена: очередь заказов дня (2 обычные машины + сюжетные гости по расписанию),
@@ -27,6 +28,9 @@ public sealed class ServiceDirector : MonoBehaviour
         public int pumpIndex;
     }
 
+    /// <summary>Текущая стадия выполнения заказа.</summary>
+    public OrderStage CurrentStage { get; private set; } = OrderStage.None;
+
     /// <summary>Текущий заказ смены; null — смена не идёт.</summary>
     public Order CurrentOrder { get; private set; }
 
@@ -35,16 +39,14 @@ public sealed class ServiceDirector : MonoBehaviour
     /// Плашка «[E] Заправить» показывается только у этой колонки: остальные стоят
     /// пустые, и подходить к ним незачем.
     /// </summary>
-    public int OrderPumpNumber => CanRefuel ? CurrentOrder.pumpIndex + 1 : 0;
+    public int OrderPumpNumber => CanRefuel && CurrentOrder != null ? CurrentOrder.pumpIndex + 1 : 0;
 
-    /// <summary>Заказ ещё можно заправлять: заказ есть и топливо по нему не выдано.</summary>
+    /// <summary>Заказ ещё можно заправлять: машина у колонки и топливо по нему не выдано.</summary>
     public bool CanRefuel =>
-        CurrentOrder != null &&
+        CurrentStage == OrderStage.Refueling &&
         truckArrival != null &&
         truckArrival.IsParked &&
-        !DialogueManager.IsActive &&
-        !fuelDeliveredForCurrentOrder &&
-        !itemStageActive;
+        !DialogueManager.IsActive;
       
     /// <summary>Часы: каждая обслуженная машина сдвигает время, таймера нет.</summary>
     public string Clock => CurrentState == "morning" ? "08:00" : CurrentState == "evening" ? "18:00" : clockText;
@@ -54,9 +56,6 @@ public sealed class ServiceDirector : MonoBehaviour
     private string clockText = "09:00";
     private int servedCount;
     private DialogueManager dialogue;
-    private bool itemStageActive;
-    private bool truckArrivedForCurrentOrder;
-    private bool fuelDeliveredForCurrentOrder;
     private Coroutine arrivalRoutine;
     private TruckArrivalController truckArrival;
 
@@ -118,7 +117,7 @@ public sealed class ServiceDirector : MonoBehaviour
         {
             // В интерьере машина во дворе не существует.
             // Если машина ещё не встала у колонки во дворе — сбрасываем подъезд.
-            if (!truckArrivedForCurrentOrder)
+            if (CurrentStage == OrderStage.Arriving)
             {
                 truckArrival.CancelArrival();
             }
@@ -126,9 +125,9 @@ public sealed class ServiceDirector : MonoBehaviour
         }
 
         // Вернулись во двор станции:
-        if (truckArrivedForCurrentOrder)
+        // Если машина уже приехала (ждёт заправки или товар из магазина) — восстанавливаем её на месте.
+        if (CurrentStage == OrderStage.Refueling || CurrentStage == OrderStage.AwaitingItem)
         {
-            // Машина уже была у колонки (игрок ходил в магазин за товаром) — восстанавливаем её на месте.
             Transform pump = FindPump(CurrentOrder.pumpIndex);
             if (pump != null)
             {
@@ -151,6 +150,7 @@ public sealed class ServiceDirector : MonoBehaviour
         {
             CurrentState = state == DayLoopManager.DayState.Evening ? "evening" : "morning";
             CurrentOrder = null;
+            CurrentStage = OrderStage.None;
             CarriedGood = null;
             if (arrivalRoutine != null)
             {
@@ -224,10 +224,8 @@ public sealed class ServiceDirector : MonoBehaviour
     private void NextOrder()
     {
         CarriedGood = null;
-        itemStageActive = false;
-        fuelDeliveredForCurrentOrder = false;
-        truckArrivedForCurrentOrder = false;
         CurrentOrder = queue.Count > 0 ? queue[0] : null;
+        CurrentStage = CurrentOrder != null ? OrderStage.Arriving : OrderStage.None;
 
         if (arrivalRoutine != null)
         {
@@ -271,7 +269,7 @@ public sealed class ServiceDirector : MonoBehaviour
             yield return null;
         }
 
-        if (!CanCarArrive || CurrentOrder != order || truckArrivedForCurrentOrder)
+        if (!CanCarArrive || CurrentOrder != order || CurrentStage != OrderStage.Arriving)
         {
             arrivalRoutine = null;
             yield break;
@@ -288,7 +286,7 @@ public sealed class ServiceDirector : MonoBehaviour
         // 3. Запускаем физический подъезд машины (без задержки внутри контроллера).
         if (!truckArrival.Begin(pump, () =>
         {
-            truckArrivedForCurrentOrder = true;
+            CurrentStage = OrderStage.Refueling;
             ShowGreeting(order);
         }))
         {
@@ -321,7 +319,7 @@ public sealed class ServiceDirector : MonoBehaviour
     public void OnFuelDelivered(float liters)
     {
         Order order = CurrentOrder;
-        if (order == null || itemStageActive || fuelDeliveredForCurrentOrder)
+        if (order == null || CurrentStage != OrderStage.Refueling)
         {
             return;
         }
@@ -347,7 +345,6 @@ public sealed class ServiceDirector : MonoBehaviour
             return;
         }
 
-        fuelDeliveredForCurrentOrder = true;
         AdvanceClock();
 
         // Клиент, который просит ещё и товар (Дядя Котлета — кофе), остаётся у колонки:
@@ -356,7 +353,7 @@ public sealed class ServiceDirector : MonoBehaviour
 
         if (awaitsItem)
         {
-            itemStageActive = true;
+            CurrentStage = OrderStage.AwaitingItem;
             Debug.Log($"[Snowpaw Station] Ждём товар: {Goods.DisplayName(order.item)} (полка → стойка → подтвердить).");
 
             // Подсказка после заправки: товар берут на полке и отдают на стойке — всё по [E].
@@ -392,7 +389,7 @@ public sealed class ServiceDirector : MonoBehaviour
     /// <summary>Взять товар с полки. Один товар за раз.</summary>
     public bool TakeGood(string goodId)
     {
-        if (CurrentOrder == null || !itemStageActive || !string.IsNullOrEmpty(CarriedGood))
+        if (CurrentOrder == null || CurrentStage != OrderStage.AwaitingItem || !string.IsNullOrEmpty(CarriedGood))
         {
             return false;
         }
@@ -405,7 +402,7 @@ public sealed class ServiceDirector : MonoBehaviour
     /// <summary>Подтвердить товар на стойке (рычаг кассы): товар выдан клиенту.</summary>
     public void ConfirmOnCounter()
     {
-        if (CurrentOrder == null || !itemStageActive)
+        if (CurrentOrder == null || CurrentStage != OrderStage.AwaitingItem)
         {
             return;
         }
@@ -418,7 +415,6 @@ public sealed class ServiceDirector : MonoBehaviour
 
         bool kettleHot = StationHeatSystem.Active != null && StationHeatSystem.Active.CurrentHeat >= 25f;
         CarriedGood = null;
-        itemStageActive = false;
 
         if (dialogue != null)
         {
@@ -453,6 +449,7 @@ public sealed class ServiceDirector : MonoBehaviour
             return;
         }
 
+        CurrentStage = OrderStage.Departing;
         Order done = CurrentOrder;
         if (queue.Count > 0 && queue[0].id == done.id)
         {
