@@ -35,13 +35,17 @@ public sealed class ServiceDirector : MonoBehaviour
     /// Плашка «[E] Заправить» показывается только у этой колонки: остальные стоят
     /// пустые, и подходить к ним незачем.
     /// </summary>
-    public int OrderPumpNumber => CurrentOrder != null && !fuelDeliveredForCurrentOrder && !itemStageActive
-        ? CurrentOrder.pumpIndex + 1
-        : 0;
+    public int OrderPumpNumber => CanRefuel ? CurrentOrder.pumpIndex + 1 : 0;
 
     /// <summary>Заказ ещё можно заправлять: заказ есть и топливо по нему не выдано.</summary>
-    public bool CanRefuel => CurrentOrder != null && !fuelDeliveredForCurrentOrder && !itemStageActive;
-
+    public bool CanRefuel =>
+        CurrentOrder != null &&
+        truckArrival != null &&
+        truckArrival.IsParked &&
+        !DialogueManager.IsActive &&
+        !fuelDeliveredForCurrentOrder &&
+        !itemStageActive;
+      
     /// <summary>Часы: каждая обслуженная машина сдвигает время, таймера нет.</summary>
     public string Clock => CurrentState == "morning" ? "08:00" : CurrentState == "evening" ? "18:00" : clockText;
 

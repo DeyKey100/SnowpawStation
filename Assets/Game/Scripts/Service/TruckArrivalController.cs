@@ -149,6 +149,7 @@ public sealed class TruckArrivalController : MonoBehaviour
         leavePoint = approachPoint + travelForward * DepartDistance;
         truck.position = exitPoint;
         FocusCameraOnTruck();
+        InteractionLock.Add("truck_arrival");
         motion = Motion.Arriving;
         Debug.Log($"[Snowpaw Station] Трак подъезжает к первой колонке. Точка остановки: {approachPoint}.");
         return true;
@@ -393,6 +394,7 @@ public sealed class TruckArrivalController : MonoBehaviour
             truck.position = approachPoint;
             motion = Motion.Parked;
             RestoreCameraTarget();
+            InteractionLock.Remove("truck_arrival");
             Action arrivalCallback = arrived;
             arrived = null;
             arrivalCallback?.Invoke();
@@ -473,5 +475,10 @@ public sealed class TruckArrivalController : MonoBehaviour
         }
 #endif
         return Resources.Load<GameObject>("truck");
+    }
+
+    private void OnDestroy()
+    {
+        InteractionLock.Remove("truck_arrival");
     }
 }
