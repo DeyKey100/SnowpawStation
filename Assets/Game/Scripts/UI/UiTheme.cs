@@ -105,6 +105,89 @@ public static class UiTheme
         GUI.color = previous;
     }
 
+    /// <summary>Кнопка темы: рамка загорается под курсором. Возвращает true по клику.</summary>
+    public static bool Button(Rect rect, string text, float fontSize = 18f, bool active = false)
+    {
+        bool hover = rect.Contains(Event.current.mousePosition);
+        bool lit = hover || active;
+        Frame(rect, lit ? EmberDark : NightSoft, lit ? Ember : Frost);
+        GUI.Label(rect, text, Label(fontSize, lit ? Cream : Text, FontStyle.Bold, TextAnchor.MiddleCenter));
+        return GUI.Button(rect, GUIContent.none, GUIStyle.none);
+    }
+
+    /// <summary>Горизонтальный ползунок 0..1 в стиле темы.</summary>
+    public static float Slider(Rect rect, float value)
+    {
+        int id = GUIUtility.GetControlID(FocusType.Passive);
+        Event e = Event.current;
+        float pixel = PixelSize;
+        float knob = pixel * 6f;
+        float travel = Mathf.Max(1f, rect.width - knob);
+
+        switch (e.GetTypeForControl(id))
+        {
+            case EventType.MouseDown:
+                if (e.button == 0 && rect.Contains(e.mousePosition))
+                {
+                    GUIUtility.hotControl = id;
+                    value = Mathf.Clamp01((e.mousePosition.x - rect.x - knob * 0.5f) / travel);
+                    GUI.changed = true;
+                    e.Use();
+                }
+                break;
+            case EventType.MouseDrag:
+                if (GUIUtility.hotControl == id)
+                {
+                    value = Mathf.Clamp01((e.mousePosition.x - rect.x - knob * 0.5f) / travel);
+                    GUI.changed = true;
+                    e.Use();
+                }
+                break;
+            case EventType.MouseUp:
+                if (GUIUtility.hotControl == id)
+                {
+                    GUIUtility.hotControl = 0;
+                    e.Use();
+                }
+                break;
+            case EventType.Repaint:
+                value = Mathf.Clamp01(value);
+                float trackHeight = pixel * 4f;
+                Rect track = new Rect(rect.x, rect.center.y - trackHeight * 0.5f, rect.width, trackHeight);
+                Fill(track, Outline);
+                Rect inner = new Rect(track.x + pixel, track.y + pixel, track.width - pixel * 2f, track.height - pixel * 2f);
+                Fill(inner, NightSoft);
+                Fill(new Rect(inner.x, inner.y, inner.width * value, inner.height), Ember);
+                Rect knobRect = new Rect(rect.x + travel * value, rect.center.y - pixel * 5f, knob, pixel * 10f);
+                Fill(knobRect, Outline);
+                Fill(new Rect(knobRect.x + pixel, knobRect.y + pixel, knobRect.width - pixel * 2f, knobRect.height - pixel * 2f), Cream);
+                break;
+        }
+
+        return value;
+    }
+
+    /// <summary>Полоса-индикатор 0..1 с пиксельной обводкой и делениями.</summary>
+    public static void Bar(Rect rect, float value, Color color)
+    {
+        if (Event.current.type != EventType.Repaint)
+        {
+            return;
+        }
+
+        float pixel = PixelSize;
+        Fill(rect, Outline);
+        Rect inner = new Rect(rect.x + pixel, rect.y + pixel, rect.width - pixel * 2f, rect.height - pixel * 2f);
+        Fill(inner, NightSoft);
+        Fill(new Rect(inner.x, inner.y, inner.width * Mathf.Clamp01(value), inner.height), color);
+        // Блик сверху и деления по четвертям — чтобы полоса читалась как «прибор».
+        Fill(new Rect(inner.x, inner.y, inner.width * Mathf.Clamp01(value), pixel), new Color(1f, 1f, 1f, 0.22f));
+        for (int i = 1; i < 4; i++)
+        {
+            Fill(new Rect(inner.x + inner.width * i / 4f - pixel * 0.5f, inner.y, pixel, inner.height), new Color(0f, 0f, 0f, 0.35f));
+        }
+    }
+
     private static GUIStyle FrameStyle(Color fill, Color border, int pixel)
     {
         string key = $"{(Color32)fill}|{(Color32)border}|{pixel}";
