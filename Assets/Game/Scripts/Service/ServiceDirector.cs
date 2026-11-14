@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public enum FuelResult { Underfilled, Accepted, Perfect, Overfilled }
+public enum OrderStage { None, Arriving, Refueling, AwaitingItem, Departing }
 
 /// <summary>
 /// Рабочая смена: очередь заказов дня (2 обычные машины + сюжетные гости по расписанию),
@@ -27,6 +28,9 @@ public sealed class ServiceDirector : MonoBehaviour
         public int pumpIndex;
     }
 
+    /// <summary>Текущая стадия выполнения заказа.</summary>
+    public OrderStage CurrentStage { get; private set; } = OrderStage.None;
+
     /// <summary>Текущий заказ смены; null — смена не идёт.</summary>
     public Order CurrentOrder { get; private set; }
 
@@ -35,13 +39,15 @@ public sealed class ServiceDirector : MonoBehaviour
     /// Плашка «[E] Заправить» показывается только у этой колонки: остальные стоят
     /// пустые, и подходить к ним незачем.
     /// </summary>
-    public int OrderPumpNumber => CurrentOrder != null && !fuelDeliveredForCurrentOrder && !itemStageActive
-        ? CurrentOrder.pumpIndex + 1
-        : 0;
+    public int OrderPumpNumber => CanRefuel && CurrentOrder != null ? CurrentOrder.pumpIndex + 1 : 0;
 
-    /// <summary>Заказ ещё можно заправлять: заказ есть и топливо по нему не выдано.</summary>
-    public bool CanRefuel => CurrentOrder != null && !fuelDeliveredForCurrentOrder && !itemStageActive;
-
+    /// <summary>Заказ ещё можно заправлять: машина у колонки и топливо по нему не выдано.</summary>
+    public bool CanRefuel =>
+        CurrentStage == OrderStage.Refueling &&
+        truckArrival != null &&
+        truckArrival.IsParked &&
+        !DialogueManager.IsActive;
+      
     /// <summary>Часы: каждая обслуженная машина сдвигает время, таймера нет.</summary>
     public string Clock => CurrentState == "morning" ? "08:00" : CurrentState == "evening" ? "18:00" : clockText;
 
@@ -50,10 +56,11 @@ public sealed class ServiceDirector : MonoBehaviour
     private string clockText = "09:00";
     private int servedCount;
     private DialogueManager dialogue;
-    private bool itemStageActive;
-    private bool fuelDeliveredForCurrentOrder;
-    private Coroutine shiftStartRoutine;
+    private Coroutine arrivalRoutine;
     private TruckArrivalController truckArrival;
+
+    private const float MinArrivalDelay = 2.5f;
+    private const float MaxArrivalDelay = 5.5f;
 
     /// <summary>Товар, взятый с полки (в «лапах» до подтверждения на стойке).</summary>
     public string CarriedGood { get; private set; }
@@ -100,12 +107,32 @@ public sealed class ServiceDirector : MonoBehaviour
         EnsurePumps(scene);
         EnsureShop(scene);
 
-        if (CurrentOrder != null &&
-            !scene.name.ToLowerInvariant().Contains("interior") &&
-            truckArrival != null &&
-            !truckArrival.IsActive)
+        if (CurrentOrder == null || truckArrival == null)
         {
-            StartTruckArrival(CurrentOrder);
+            return;
+        }
+
+        bool isInterior = scene.name.ToLowerInvariant().Contains("interior");
+        if (isInterior)
+        {
+            // В интерьере машина во дворе не существует.
+            // Если машина ещё не встала у колонки во дворе — сбрасываем подъезд.
+            if (CurrentStage == OrderStage.Arriving)
+            {
+                truckArrival.CancelArrival();
+            }
+            return;
+        }
+
+        // Вернулись во двор станции:
+        // Если машина уже приехала (ждёт заправки или товар из магазина) — восстанавливаем её на месте.
+        if (CurrentStage == OrderStage.Refueling || CurrentStage == OrderStage.AwaitingItem)
+        {
+            Transform pump = FindPump(CurrentOrder.pumpIndex);
+            if (pump != null)
+            {
+                truckArrival.SpawnParked(pump);
+            }
         }
     }
 
@@ -117,86 +144,38 @@ public sealed class ServiceDirector : MonoBehaviour
             clockText = "09:00";
             servedCount = 0;
             BuildQueue(day);
-            // Не выдёргиваем игрока из текущего диалога (например, «печь растоплена»):
-            // первый заказ подъезжает только когда экран свободен.
-            if (shiftStartRoutine != null)
-            {
-                StopCoroutine(shiftStartRoutine);
-            }
-
-            shiftStartRoutine = StartCoroutine(BeginShiftDelayed());
-        }
-        else if (state == DayLoopManager.DayState.Evening)
-        {
-            CurrentState = "evening";
-            CurrentOrder = null;
-            CarriedGood = null;
-            if (truckArrival != null && truckArrival.IsActive)
-            {
-                truckArrival.Depart();
-            }
-            OrderChanged?.Invoke(null);
-        }
-        else if (state == DayLoopManager.DayState.Morning)
-        {
-            CurrentState = "morning";
-            CurrentOrder = null;
-            if (truckArrival != null && truckArrival.IsActive)
-            {
-                truckArrival.Depart();
-            }
-            OrderChanged?.Invoke(null);
-        }
-    }
-
-    /// <summary>Пауза перед первым заказом: игрок должен увидеть свою реплику, а не прыжок в смену.</summary>
-    private System.Collections.IEnumerator BeginShiftDelayed()
-    {
-        // Ждём, пока закроется текущий диалог (заправка печи и т.п.), максимум ~3 с.
-        float waited = 0f;
-        while (DialogueManager.IsActive && waited < 3f)
-        {
-            waited += Time.unscaledDeltaTime;
-            yield return null;
-        }
-
-        yield return new WaitForSeconds(0.8f);
-
-        // Первый посетитель приезжает только на улице и только после записки:
-        // если игрок ещё в магазине, машина подъедет, как только он выйдет.
-        while (CurrentState == "shift" && !CanVisitorArrive)
-        {
-            yield return null;
-        }
-
-        if (CurrentState == "shift" && CurrentOrder == null)
-        {
             NextOrder();
+        }
+        else if (state == DayLoopManager.DayState.Evening || state == DayLoopManager.DayState.Morning)
+        {
+            CurrentState = state == DayLoopManager.DayState.Evening ? "evening" : "morning";
+            CurrentOrder = null;
+            CurrentStage = OrderStage.None;
+            CarriedGood = null;
+            if (arrivalRoutine != null)
+            {
+                StopCoroutine(arrivalRoutine);
+                arrivalRoutine = null;
+            }
+
+            if (truckArrival != null && truckArrival.IsActive)
+            {
+                truckArrival.Depart();
+            }
+            OrderChanged?.Invoke(null);
         }
     }
 
     /// <summary>
-    /// Посетитель может приехать: смена идёт, записка прочитана и игрок на улице.
-    /// В интерьере машины нет — она стоит во дворе, которого в этой сцене не существует.
+    /// Машина с заказом может подъехать: смена идёт, записка сторожа прочитана и игрок во дворе.
     /// </summary>
-    private bool CanVisitorArrive
-    {
-        get
-        {
-            if (DayLoopManager.Instance == null ||
-                DayLoopManager.Instance.CurrentState != DayLoopManager.DayState.WorkShift)
-            {
-                return false;
-            }
-
-            if (!GameState.IsDayEventDone(KeeperNoteInteractable.ReadEventId))
-            {
-                return false;
-            }
-
-            return !SceneManager.GetActiveScene().name.ToLowerInvariant().Contains("interior");
-        }
-    }
+    private bool CanCarArrive =>
+        CurrentState == "shift" &&
+        DayLoopManager.Instance != null &&
+        DayLoopManager.Instance.CurrentState == DayLoopManager.DayState.WorkShift &&
+        GameState.IsDayEventDone(KeeperNoteInteractable.ReadEventId) &&
+        !SceneLoadingScreen.IsLoading &&
+        !SceneManager.GetActiveScene().name.ToLowerInvariant().Contains("interior");
 
     private void BuildQueue(int day)
     {
@@ -245,45 +224,81 @@ public sealed class ServiceDirector : MonoBehaviour
     private void NextOrder()
     {
         CarriedGood = null;
-        itemStageActive = false;
-        fuelDeliveredForCurrentOrder = false;
         CurrentOrder = queue.Count > 0 ? queue[0] : null;
+        CurrentStage = CurrentOrder != null ? OrderStage.Arriving : OrderStage.None;
+
+        if (arrivalRoutine != null)
+        {
+            StopCoroutine(arrivalRoutine);
+            arrivalRoutine = null;
+        }
 
         if (CurrentOrder != null)
         {
             Debug.Log($"[Snowpaw Station] Заказ: {CurrentOrder.displayName} — {CurrentOrder.liters:0} л{(CurrentOrder.item != null ? $", {Goods.DisplayName(CurrentOrder.item)}" : "")}.");
             OrderChanged?.Invoke(CurrentOrder);
-            StartTruckArrival(CurrentOrder);
+
+            arrivalRoutine = StartCoroutine(WaitForCarArrivalRoutine(CurrentOrder));
         }
     }
 
-    private void StartTruckArrival(Order order)
+    private System.Collections.IEnumerator WaitForCarArrivalRoutine(Order order)
     {
+        // 1. Ждём, пока игрок выйдет во двор станции, экран загрузки скроется и закроются диалоги.
+        while (!CanCarArrive || DialogueManager.IsActive)
+        {
+            yield return null;
+        }
+
+        // 2. Случайное время ожидания между машинами во дворе.
+        float targetDelay = Random.Range(MinArrivalDelay, MaxArrivalDelay);
+        float elapsed = 0f;
+
+        while (elapsed < targetDelay)
+        {
+            if (!CanCarArrive || DialogueManager.IsActive)
+            {
+                // Если игрок ушёл в магазин или открыл диалог во время ожидания — сбрасываем паузу,
+                // чтобы после возвращения во двор машина не появилась мгновенно.
+                elapsed = 0f;
+                yield return null;
+                continue;
+            }
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (!CanCarArrive || CurrentOrder != order || CurrentStage != OrderStage.Arriving)
+        {
+            arrivalRoutine = null;
+            yield break;
+        }
+
         Transform pump = FindPump(order.pumpIndex);
         if (pump == null)
         {
             Debug.LogError($"[Snowpaw Station] Не найдена колонка №{order.pumpIndex + 1} для подъезда трака.");
-            ShowGreeting(order);
-            return;
+            arrivalRoutine = null;
+            yield break;
         }
 
-        if (truckArrival.BeginDelayed(pump, 3.5f, () =>
+        // 3. Запускаем физический подъезд машины (без задержки внутри контроллера).
+        if (!truckArrival.Begin(pump, () =>
         {
-            if (!fuelDeliveredForCurrentOrder)
-            {
-                ShowGreeting(order);
-            }
+            CurrentStage = OrderStage.Refueling;
+            ShowGreeting(order);
         }))
         {
-            return;
+            Debug.LogWarning($"[Snowpaw Station] Не удалось запустить подъезд трака для заказа '{order.displayName}'.");
         }
 
-        ShowGreeting(order);
+        arrivalRoutine = null;
     }
 
     private void ShowGreeting(Order order)
     {
-        if (dialogue == null)
+        if (dialogue == null || order == null)
         {
             return;
         }
@@ -304,7 +319,7 @@ public sealed class ServiceDirector : MonoBehaviour
     public void OnFuelDelivered(float liters)
     {
         Order order = CurrentOrder;
-        if (order == null || itemStageActive || fuelDeliveredForCurrentOrder)
+        if (order == null || CurrentStage != OrderStage.Refueling)
         {
             return;
         }
@@ -330,7 +345,6 @@ public sealed class ServiceDirector : MonoBehaviour
             return;
         }
 
-        fuelDeliveredForCurrentOrder = true;
         AdvanceClock();
 
         // Клиент, который просит ещё и товар (Дядя Котлета — кофе), остаётся у колонки:
@@ -339,7 +353,7 @@ public sealed class ServiceDirector : MonoBehaviour
 
         if (awaitsItem)
         {
-            itemStageActive = true;
+            CurrentStage = OrderStage.AwaitingItem;
             Debug.Log($"[Snowpaw Station] Ждём товар: {Goods.DisplayName(order.item)} (полка → стойка → подтвердить).");
 
             // Подсказка после заправки: товар берут на полке и отдают на стойке — всё по [E].
@@ -375,7 +389,7 @@ public sealed class ServiceDirector : MonoBehaviour
     /// <summary>Взять товар с полки. Один товар за раз.</summary>
     public bool TakeGood(string goodId)
     {
-        if (CurrentOrder == null || !itemStageActive || !string.IsNullOrEmpty(CarriedGood))
+        if (CurrentOrder == null || CurrentStage != OrderStage.AwaitingItem || !string.IsNullOrEmpty(CarriedGood))
         {
             return false;
         }
@@ -388,7 +402,7 @@ public sealed class ServiceDirector : MonoBehaviour
     /// <summary>Подтвердить товар на стойке (рычаг кассы): товар выдан клиенту.</summary>
     public void ConfirmOnCounter()
     {
-        if (CurrentOrder == null || !itemStageActive)
+        if (CurrentOrder == null || CurrentStage != OrderStage.AwaitingItem)
         {
             return;
         }
@@ -401,7 +415,6 @@ public sealed class ServiceDirector : MonoBehaviour
 
         bool kettleHot = StationHeatSystem.Active != null && StationHeatSystem.Active.CurrentHeat >= 25f;
         CarriedGood = null;
-        itemStageActive = false;
 
         if (dialogue != null)
         {
@@ -436,6 +449,7 @@ public sealed class ServiceDirector : MonoBehaviour
             return;
         }
 
+        CurrentStage = OrderStage.Departing;
         Order done = CurrentOrder;
         if (queue.Count > 0 && queue[0].id == done.id)
         {
@@ -562,6 +576,7 @@ public sealed class ServiceDirector : MonoBehaviour
             }
         }
 
+        result.Sort((a, b) => string.Compare(a.name, b.name, System.StringComparison.OrdinalIgnoreCase));
         return result;
     }
 
