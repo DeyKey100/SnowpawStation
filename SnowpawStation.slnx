@@ -65,6 +65,7 @@
   <Project Path="Unity.AppUI.MVVM.csproj" />
   <Project Path="Unity.Cloud.AppLinking.Embedded.csproj" />
   <Project Path="Unity.Multiplayer.Center.Common.csproj" />
+  <Project Path="com.IvanMurzak.Unity.MCP.Editor.Rql.AssetStore.csproj" />
   <Project Path="Unity.AppUI.Navigation.csproj" />
   <Project Path="Unity.Cloud.Common.Runtime.Embedded.csproj" />
   <Project Path="Unity.AI.Navigation.csproj" />

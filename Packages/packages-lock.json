@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "com.ivanmurzak.unity.mcp": {
-      "version": "1.7.1",
+      "version": "1.11.1",
       "depth": 0,
       "source": "registry",
       "dependencies": {
@@ -12,11 +12,11 @@
       "url": "https://package.openupm.com"
     },
     "com.ivanmurzak.unity.mcp.navigation": {
-      "version": "2.1.0",
+      "version": "2.1.1",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.ivanmurzak.unity.mcp": "1.6.0",
+        "com.ivanmurzak.unity.mcp": "1.6.2",
         "com.unity.ai.navigation": "1.1.7"
       },
       "url": "https://package.openupm.com"
