@@ -253,6 +253,7 @@ public class SceneLoadingScreen : MonoBehaviour
         GUIStyle titleStyle = new GUIStyle(GUI.skin.label)
         {
             alignment = TextAnchor.MiddleCenter,
+            font = UiTheme.Font,
             fontSize = 34,
             fontStyle = FontStyle.Bold,
             normal = { textColor = failed ? new Color(1f, 0.35f, 0.35f) : Color.white }
@@ -278,6 +279,7 @@ public class SceneLoadingScreen : MonoBehaviour
         GUIStyle percentStyle = new GUIStyle(GUI.skin.label)
         {
             alignment = TextAnchor.MiddleCenter,
+            font = UiTheme.Font,
             fontSize = 18,
             normal = { textColor = new Color(1f, 1f, 1f, 0.75f) }
         };

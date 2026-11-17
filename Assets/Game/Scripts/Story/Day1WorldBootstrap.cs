@@ -311,11 +311,13 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
         GUI.color = Color.white;
         Rect knob = new Rect(bar.x + bar.width * marker - 3f, bar.y - 4f, 6f, h + 8f);
         GUI.DrawTexture(knob, Texture2D.whiteTexture);
-        GUI.Label(new Rect(bar.x, bar.y + h + 8f, w, 26f),
-            "ЛКМ — рубить в зелёной зоне (Q — выйти)", new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 18
-            });
+        const string hint = "ЛКМ - рубить дрова, Q - выйти.";
+        GUIStyle hintStyle = UiTheme.Label(18f, UiTheme.Text,
+            alignment: TextAnchor.UpperCenter, wordWrap: true, scaleWithScreen: false);
+        float hintWidth = Mathf.Min(Screen.width - 32f, Mathf.Max(w, hintStyle.CalcSize(new GUIContent(hint)).x));
+        float hintHeight = UiTheme.TextHeight(hintStyle, hint, hintWidth);
+        Rect hintRect = new Rect((Screen.width - hintWidth) * 0.5f, bar.yMax + 12f, hintWidth, hintHeight);
+        UiTheme.Fill(new Rect(hintRect.x - 8f, hintRect.y - 4f, hintRect.width + 16f, hintRect.height + 8f), UiTheme.Night);
+        GUI.Label(hintRect, hint, hintStyle);
     }
 }

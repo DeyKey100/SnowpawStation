@@ -499,3 +499,6 @@ FodyWeavers.xsd
 ### VisualStudio Patch ###
 # Additional files built by Visual Studio
 README.md
+.claudeignore
+.mcp.json
+/.sharrowkin

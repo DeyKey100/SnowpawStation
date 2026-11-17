@@ -59,9 +59,13 @@ public sealed class StationHud : MonoBehaviour
     private int displayedDay = 1;
     private float displayedHeat = 75f;
     private float maximumHeat = 100f;
-    private GUIStyle labelStyle;
-    private GUIStyle heatBackStyle;
-    private GUIStyle heatFillStyle;
+    private string storyTitle;
+    private readonly System.Collections.Generic.List<string> storyRows = new System.Collections.Generic.List<string>();
+    private readonly System.Collections.Generic.List<int> storyMarks = new System.Collections.Generic.List<int>();
+
+    private const int MarkNone = 0;
+    private const int MarkTodo = 1;
+    private const int MarkDone = 2;
 
     private void Awake()
     {
@@ -187,41 +191,123 @@ public sealed class StationHud : MonoBehaviour
             return;
         }
 
-        EnsureStyles();
+        BuildStoryRows();
 
-        const float margin = 20f;
-        const float topOffset = 72f;
-        const float lineHeight = 32f;
-        GUI.Label(new Rect(margin, topOffset, 420f, lineHeight), $"День {displayedDay} · {phaseLabel}", labelStyle);
+        float s = UiTheme.Scale;
+        float margin = 20f * s;
+        float pad = 14f * s;
+        float rowHeight = 24f * s;
+        float titleHeight = 26f * s;
+        float barHeight = 16f * s;
+        float markSize = 12f * s;
 
-        const float barWidth = 220f;
-        const float barHeight = 22f;
-        Rect barRect = new Rect(margin, topOffset + lineHeight + 4f, barWidth, barHeight);
-        GUI.Box(barRect, GUIContent.none, heatBackStyle);
+        GUIStyle title = UiTheme.Label(20f, UiTheme.Cream, FontStyle.Bold, TextAnchor.MiddleLeft);
+        GUIStyle caption = UiTheme.Label(16f, UiTheme.Ice, FontStyle.Bold, TextAnchor.MiddleLeft);
+        GUIStyle row = UiTheme.Label(16f, UiTheme.Text, FontStyle.Normal, TextAnchor.MiddleLeft);
+        GUIStyle rowDone = UiTheme.Label(16f, UiTheme.Muted, FontStyle.Normal, TextAnchor.MiddleLeft);
+        GUIStyle percent = UiTheme.Label(16f, UiTheme.Text, FontStyle.Bold, TextAnchor.MiddleRight);
 
+        // Ширина панели подстраивается под самую длинную строку.
+        float inner = 280f * s;
+        if (storyTitle != null)
+        {
+            inner = Mathf.Max(inner, caption.CalcSize(new GUIContent(storyTitle)).x);
+        }
+
+        for (int i = 0; i < storyRows.Count; i++)
+        {
+            float indent = storyMarks[i] == MarkNone ? 0f : markSize + 8f * s;
+            inner = Mathf.Max(inner, row.CalcSize(new GUIContent(storyRows[i])).x + indent);
+        }
+
+        inner = Mathf.Min(inner, Screen.width - margin * 2f - pad * 2f);
+
+        float height = pad * 2f + titleHeight + 6f * s + barHeight;
+        if (storyTitle != null)
+        {
+            height += 12f * s + rowHeight * (1 + storyRows.Count);
+        }
+
+        Rect panel = new Rect(margin, 72f * s, inner + pad * 2f, height);
+        UiTheme.Frame(panel, UiTheme.Night, UiTheme.Frost);
+
+        float x = panel.x + pad;
+        float y = panel.y + pad;
+        GUI.Label(new Rect(x, y, inner, titleHeight), $"День {displayedDay} · {phaseLabel}", title);
+        y += titleHeight + 6f * s;
+
+        // Тепло: холодная полоса — лёд, тёплая — огонь печи.
         float normalizedHeat = maximumHeat > 0f ? Mathf.Clamp01(displayedHeat / maximumHeat) : 0f;
-        Rect fillRect = new Rect(barRect.x + 2f, barRect.y + 2f, (barWidth - 4f) * normalizedHeat, barHeight - 4f);
-        GUI.Box(fillRect, GUIContent.none, heatFillStyle);
-        GUI.Label(new Rect(barRect.x + barWidth + 8f, barRect.y - 3f, 100f, barHeight + 6f), $"{displayedHeat:0}%", labelStyle);
+        float percentWidth = 52f * s;
+        Color heatColor = Color.Lerp(UiTheme.Ice, UiTheme.Ember, Mathf.InverseLerp(0.2f, 0.7f, normalizedHeat));
+        UiTheme.Bar(new Rect(x, y, inner - percentWidth, barHeight), normalizedHeat, heatColor);
 
-        DrawStoryPanel(margin, topOffset + lineHeight + barHeight + 16f);
+        // Когда станция выстывает, процент мигает — без звука и лишних окон.
+        if (normalizedHeat < 0.25f)
+        {
+            float blink = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 6f);
+            percent.normal.textColor = Color.Lerp(UiTheme.Muted, UiTheme.Ice, blink);
+        }
+
+        GUI.Label(new Rect(x + inner - percentWidth, y - 4f * s, percentWidth, barHeight + 8f * s), $"{displayedHeat:0}%", percent);
+        y += barHeight;
+
+        if (storyTitle == null)
+        {
+            return;
+        }
+
+        y += 6f * s;
+        UiTheme.Fill(new Rect(x, y, inner, Mathf.Max(1f, UiTheme.PixelSize * 0.5f)), new Color(UiTheme.Frost.r, UiTheme.Frost.g, UiTheme.Frost.b, 0.6f));
+        y += 6f * s;
+
+        GUI.Label(new Rect(x, y, inner, rowHeight), storyTitle, caption);
+        y += rowHeight;
+
+        for (int i = 0; i < storyRows.Count; i++)
+        {
+            float textX = x;
+            int mark = storyMarks[i];
+            if (mark != MarkNone)
+            {
+                DrawMark(new Rect(x, y + (rowHeight - markSize) * 0.5f, markSize, markSize), mark == MarkDone);
+                textX += markSize + 8f * s;
+            }
+
+            GUI.Label(new Rect(textX, y, inner - (textX - x), rowHeight), storyRows[i], mark == MarkDone ? rowDone : row);
+            y += rowHeight;
+        }
+    }
+
+    /// <summary>Пиксельный чекбокс вместо символов «✓/•»: их может не быть в шрифте.</summary>
+    private static void DrawMark(Rect rect, bool done)
+    {
+        float pixel = UiTheme.PixelSize;
+        UiTheme.Fill(rect, UiTheme.Outline);
+        Rect inner = new Rect(rect.x + pixel, rect.y + pixel, rect.width - pixel * 2f, rect.height - pixel * 2f);
+        UiTheme.Fill(inner, done ? UiTheme.Ember : UiTheme.Frost);
+        if (!done)
+        {
+            UiTheme.Fill(new Rect(inner.x + pixel, inner.y + pixel, inner.width - pixel * 2f, inner.height - pixel * 2f), UiTheme.Night);
+        }
     }
 
     /// <summary>Утренние задачи (фаза «Утро»), текущий заказ и часы (фаза «Смена»).</summary>
-    private void DrawStoryPanel(float x, float y)
+    private void BuildStoryRows()
     {
+        storyTitle = null;
+        storyRows.Clear();
+        storyMarks.Clear();
+
         if (dayLoopManager == null)
         {
             return;
         }
 
-        GUIStyle small = new GUIStyle(labelStyle) { fontSize = 18 };
-
         if (dayLoopManager.CurrentState == DayLoopManager.DayState.Morning)
         {
-            GUI.Label(new Rect(x, y, 420f, 26f), "Утро — до смены:", small);
+            storyTitle = "До смены";
             System.Collections.Generic.List<DayPlan.MorningTask> tasks = DayPlans.GetMorningTasks(dayLoopManager.CurrentDay);
-            int row = 0;
             for (int i = 0; i < tasks.Count; i++)
             {
                 bool done = dayLoopManager.GetTaskProgress(tasks[i].id) >= tasks[i].target;
@@ -232,58 +318,24 @@ public sealed class StationHud : MonoBehaviour
                     continue;
                 }
 
-                Color prev = GUI.color;
-                GUI.color = done ? new Color(0.55f, 0.85f, 0.55f) : Color.white;
-                GUI.Label(new Rect(x + 14f, y + 28f + row * 24f, 460f, 24f),
-                    (done ? "✓ " : "• ") + tasks[i].label, small);
-                GUI.color = prev;
-                row++;
+                storyRows.Add(tasks[i].label);
+                storyMarks.Add(done ? MarkDone : MarkTodo);
             }
         }
         else if (dayLoopManager.CurrentState == DayLoopManager.DayState.WorkShift)
         {
             ServiceDirector service = ServiceDirector.Instance;
             string clock = service != null ? service.Clock : "09:00";
-            GUI.Label(new Rect(x, y, 420f, 26f), $"Смена · {clock} · машин: {dayLoopManager.CarsServed}/{dayLoopManager.RegularCarQuota}", small);
+            storyTitle = $"{clock} · машин: {dayLoopManager.CarsServed}/{dayLoopManager.RegularCarQuota}";
 
             if (service != null && service.CurrentOrder != null)
             {
                 var order = service.CurrentOrder;
                 string item = string.IsNullOrEmpty(order.item) ? "" : $" + {Goods.DisplayName(order.item)}";
-                GUI.Label(new Rect(x + 14f, y + 28f, 460f, 26f), $"Заказ: {order.displayName} — {order.liters:0} л{item}", small);
+                storyRows.Add($"Заказ: {order.displayName} — {order.liters:0} л{item}");
+                storyMarks.Add(MarkNone);
             }
         }
-    }
-
-    private void EnsureStyles()
-    {
-        if (labelStyle != null)
-        {
-            return;
-        }
-
-        labelStyle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = 22,
-            fontStyle = FontStyle.Bold,
-            normal = { textColor = Color.white }
-        };
-        heatBackStyle = new GUIStyle(GUI.skin.box)
-        {
-            normal = { background = MakeTexture(new Color(0.04f, 0.07f, 0.1f, 0.9f)) }
-        };
-        heatFillStyle = new GUIStyle(GUI.skin.box)
-        {
-            normal = { background = MakeTexture(new Color(0.25f, 0.75f, 0.9f, 1f)) }
-        };
-    }
-
-    private static Texture2D MakeTexture(Color color)
-    {
-        Texture2D texture = new Texture2D(1, 1);
-        texture.SetPixel(0, 0, color);
-        texture.Apply();
-        return texture;
     }
 
     private static string GetPhaseLabel(DayLoopManager.DayState state)

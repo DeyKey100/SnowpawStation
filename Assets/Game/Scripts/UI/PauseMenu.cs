@@ -288,6 +288,7 @@ public sealed class PauseMenu : MonoBehaviour
 
         titleStyle = new GUIStyle(GUI.skin.label)
         {
+            font = UiTheme.Font,
             fontSize = 26,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleLeft,
@@ -296,12 +297,14 @@ public sealed class PauseMenu : MonoBehaviour
 
         buttonStyle = new GUIStyle(GUI.skin.button)
         {
+            font = UiTheme.Font,
             fontSize = 20,
             alignment = TextAnchor.MiddleCenter
         };
 
         labelStyle = new GUIStyle(GUI.skin.label)
         {
+            font = UiTheme.Font,
             fontSize = 18,
             alignment = TextAnchor.MiddleLeft,
             normal = { textColor = new Color(0.85f, 0.9f, 0.95f) }

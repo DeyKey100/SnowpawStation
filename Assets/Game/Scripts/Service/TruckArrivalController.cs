@@ -24,9 +24,9 @@ public sealed class TruckArrivalController : MonoBehaviour
     private const float RotationSpeed = 8f;
     private const float ModelYawOffset = 270f;
     private const float CameraDistance = 3f;
-    private const float CameraHeight = 6.5f;
+    private const float CameraHeight = 5f;
     private const float CameraSideOffset = 1.5f;
-    private const float CameraLookHeight = 1.2f;
+    private const float CameraLookHeight = 1f;
     private static readonly Vector3 TruckMeshLocalPosition = new Vector3(-0.47f, 0.5f, 2.6f);
     private static readonly Vector3 EmbeddedCameraLocalPosition = new Vector3(-7.3298f, 3.5f, 6.88517f);
     private const float EmbeddedCameraYaw = 125f;

@@ -135,6 +135,7 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
             Debug.Log("[Snowpaw Station] Заправка отменена: ЛКМ не зажата.");
             fueling = false;
             armed = false;
+            HideHose();
             ReleaseLocks();
         }
     }
@@ -255,6 +256,7 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
 
         fueling = false;
         armed = false;
+        HideHose();
         ReleaseLocks();
         Service.OnFuelDelivered(poured);
     }
@@ -290,6 +292,7 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
 
         GUIStyle style = new GUIStyle
         {
+            font = UiTheme.Font,
             fontSize = 26,
             alignment = TextAnchor.MiddleCenter,
             normal = { textColor = Color.white }

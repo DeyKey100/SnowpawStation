@@ -243,6 +243,7 @@ public class SceneDoorTrigger : MonoBehaviour
         GUIStyle textStyle = new GUIStyle(GUI.skin.label)
         {
             alignment = TextAnchor.MiddleCenter,
+            font = UiTheme.Font,
             fontSize = 22,
             fontStyle = FontStyle.Bold,
             padding = new RectOffset(14, 14, 0, 0),

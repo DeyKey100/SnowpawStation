@@ -1,0 +1,34 @@
+CRISP PIXEL FONTS - UNITY SETUP
+
+These are plain .ttf / .otf / BMFont files: nothing here needs the Unity editor to be opened by us, and no
+settings are baked in. Pixel fonts are only sharp when every font pixel lands on whole screen pixels, so:
+
+1) LEGACY TEXT (UI Text, Text Mesh) - select the .ttf in the Project window and set, in the Inspector:
+     Font Size        = the font's 1x size (below)
+     Rendering Mode   = Hinted Raster      (no smoothing; the font has a no-op hinting program, so nothing moves)
+     Character        = Dynamic
+   Then set the Text component's Font Size to the 1x size or a whole multiple of it.
+
+    Crisp Pixel          Font Size = 8  (then use 8, 16, 24 ...)
+
+2) TEXTMESHPRO - Window > TextMeshPro > Font Asset Creator:
+     Source Font File      = the .ttf
+     Sampling Point Size   = Custom Size, the 1x size (or an exact multiple)
+     Padding               = 1
+     Packing Method        = Optimum,  Atlas Resolution = 256 x 256 (512 x 512 for Bold, Serif, Tall, Gothic at 2x)
+     Character Set         = Unicode Range (Hex) and paste:
+                             20-7E,A0-FF,131,152-153,160-161,178,17D-17E,192,2C6,2DC,2013-2014,2018-201A,201C-201E,2020-2022,2026,2030,2039-203A,20AC,2116,2122,2190-2193,2605,2665,400-45F,490-491
+     Render Mode           = RASTER_HINTED   (not SDF: SDF smooths pixel corners)
+   Generate, Save. Then select the generated atlas texture inside the font asset and set Filter Mode = Point,
+   and give the material the TextMeshPro/Bitmap shader. On the TMP text: Font Size = the sampling size or a whole
+   multiple, Auto Size off, Extra Padding off. Kerning is in the font (GPOS and a classic kern table); newer TMP
+   versions read it automatically, older ones have a "Get Kerning Pairs" option.
+
+3) CAMERA - with the 2D Pixel Perfect package (Pixel Perfect Camera, or URP's Pixel Perfect Camera), keep text
+   at whole-pixel positions. A Canvas Scaler that scales by a non-whole factor will blur or unevenly size the pixels;
+   use Constant Pixel Size with whole Scale Factors (1, 2, 3 ...).
+
+4) BMFONT - Unity has no built-in BMFont importer; the BMFont/ folder is for engines that do (and for TMP
+   alternatives). The TTF route above is the simplest in Unity.
+
+Line height at 1x is in the README table. Every glyph sits inside ascent + descent, so nothing is clipped.

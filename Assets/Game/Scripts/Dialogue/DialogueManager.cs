@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -9,11 +10,13 @@ using UnityEngine.InputSystem;
 /// условия показа (DialogueConditions), действия (DialogueActions), корректное завершение.
 /// На время диалога блокирует обычное взаимодействие (InteractionLock) — но не камеру:
 /// на Котова можно смотреть/отворачиваться во время визита.
+/// Внешний вид — через общую тему UiTheme.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class DialogueManager : MonoBehaviour
 {
     private const float TextSpeed = 60f; // символов в секунду
+    private const string AnswerPlate = "ВАШ ОТВЕТ";
 
     public static DialogueManager Instance { get; private set; }
     public static bool IsActive => Instance != null && Instance.script != null;
@@ -25,14 +28,14 @@ public sealed class DialogueManager : MonoBehaviour
     private int entryIndex;
     private float revealed;
     private Action onFinished;
-    private GUIStyle panelStyle;
-    private GUIStyle speakerStyle;
-    private GUIStyle textStyle;
-    private GUIStyle choiceStyle;
-    private Texture2D panelTexture;
     private string pendingFinishId;
-    private readonly System.Collections.Generic.Queue<(DialogueScript script, Action finished)> queue =
-        new System.Collections.Generic.Queue<(DialogueScript, Action)>();
+    private int selectedChoice = -1; // индекс среди видимых вариантов; -1 = ничего не подсвечено
+    private int inputBlockedFrame = -1;
+    private float openedAt;
+    private float entryShownAt;
+    private readonly List<int> visibleChoices = new List<int>();
+    private readonly Queue<(DialogueScript script, Action finished)> queue =
+        new Queue<(DialogueScript, Action)>();
 
     public DialogueScript Current => script;
 
@@ -69,11 +72,6 @@ public sealed class DialogueManager : MonoBehaviour
         {
             Instance = null;
         }
-
-        if (panelTexture != null)
-        {
-            Destroy(panelTexture);
-        }
     }
 
     /// <summary>Показать сценарий. Если диалог уже идёт — новый встанет в очередь, а не потеряется.</summary>
@@ -94,11 +92,21 @@ public sealed class DialogueManager : MonoBehaviour
             return;
         }
 
+        pendingFinishId = null;
+        Begin(newScript, finished);
+    }
+
+    private void Begin(DialogueScript newScript, Action finished)
+    {
         script = newScript;
         entryIndex = 0;
         revealed = 0f;
+        selectedChoice = -1;
         onFinished = finished;
-        pendingFinishId = null;
+        openedAt = Time.unscaledTime;
+        entryShownAt = openedAt;
+        // Нажатие E, открывшее диалог, не должно в тот же кадр «допечатать» первую реплику.
+        inputBlockedFrame = Time.frameCount;
         InteractionLock.Add("dialogue");
         DialogueStarted?.Invoke(script);
     }
@@ -117,47 +125,103 @@ public sealed class DialogueManager : MonoBehaviour
         if (!fullyRevealed)
         {
             revealed += TextSpeed * Time.unscaledDeltaTime;
-            fullyRevealed = revealed >= fullText.Length;
         }
 
-        bool advance = false;
-        int choiceIndex = -1;
+        if (Time.frameCount == inputBlockedFrame || PauseMenu.IsPaused)
+        {
+            return;
+        }
+
+        bool confirm;
+        int move = 0;
+        int digit = -1;
 
 #if ENABLE_INPUT_SYSTEM
         Keyboard keyboard = Keyboard.current;
-        if (keyboard != null)
+        if (keyboard == null)
         {
-            advance = (keyboard.eKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame ||
-                       keyboard.enterKey.wasPressedThisFrame || keyboard.leftArrowKey.wasPressedThisFrame) && fullyRevealed;
-            if (entry.IsChoice && fullyRevealed)
-            {
-                if (keyboard.digit1Key.wasPressedThisFrame) choiceIndex = 0;
-                if (keyboard.digit2Key.wasPressedThisFrame) choiceIndex = 1;
-                if (keyboard.digit3Key.wasPressedThisFrame) choiceIndex = 2;
-                if (keyboard.digit4Key.wasPressedThisFrame) choiceIndex = 3;
-            }
+            return;
         }
+
+        confirm = keyboard.eKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame ||
+                  keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame;
+        if (keyboard.upArrowKey.wasPressedThisFrame) move = -1;
+        if (keyboard.downArrowKey.wasPressedThisFrame) move = 1;
+        if (keyboard.digit1Key.wasPressedThisFrame) digit = 0;
+        if (keyboard.digit2Key.wasPressedThisFrame) digit = 1;
+        if (keyboard.digit3Key.wasPressedThisFrame) digit = 2;
+        if (keyboard.digit4Key.wasPressedThisFrame) digit = 3;
 #else
-        if (fullyRevealed)
-        {
-            advance = Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.LeftArrow);
-            if (entry.IsChoice)
-            {
-                if (Input.GetKeyDown(KeyCode.Alpha1)) choiceIndex = 0;
-                if (Input.GetKeyDown(KeyCode.Alpha2)) choiceIndex = 1;
-                if (Input.GetKeyDown(KeyCode.Alpha3)) choiceIndex = 2;
-                if (Input.GetKeyDown(KeyCode.Alpha4)) choiceIndex = 3;
-            }
-        }
+        confirm = Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Space) ||
+                  Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
+        if (Input.GetKeyDown(KeyCode.UpArrow)) move = -1;
+        if (Input.GetKeyDown(KeyCode.DownArrow)) move = 1;
+        if (Input.GetKeyDown(KeyCode.Alpha1)) digit = 0;
+        if (Input.GetKeyDown(KeyCode.Alpha2)) digit = 1;
+        if (Input.GetKeyDown(KeyCode.Alpha3)) digit = 2;
+        if (Input.GetKeyDown(KeyCode.Alpha4)) digit = 3;
 #endif
 
-        if (choiceIndex >= 0)
+        if (!entry.IsChoice)
         {
-            PickChoice(entry, choiceIndex);
+            if (!confirm)
+            {
+                return;
+            }
+
+            if (fullyRevealed)
+            {
+                NextEntry();
+            }
+            else
+            {
+                // Первое нажатие допечатывает реплику целиком, второе — листает дальше.
+                revealed = fullText.Length;
+            }
+
+            return;
         }
-        else if (advance)
+
+        // Выбор: цифра отвечает сразу, стрелки двигают подсветку, E/Space/Enter подтверждают её.
+        // Без подсветки подтверждение ничего не делает — выбор нельзя «проскочить», листая реплики.
+        RefreshVisibleChoices(entry);
+        if (visibleChoices.Count == 0)
         {
-            NextEntry();
+            if (confirm)
+            {
+                NextEntry();
+            }
+
+            return;
+        }
+
+        if (move != 0)
+        {
+            selectedChoice = selectedChoice < 0
+                ? (move > 0 ? 0 : visibleChoices.Count - 1)
+                : (selectedChoice + move + visibleChoices.Count) % visibleChoices.Count;
+        }
+
+        if (digit >= 0 && digit < visibleChoices.Count)
+        {
+            PickChoice(entry, visibleChoices[digit]);
+        }
+        else if (confirm && selectedChoice >= 0 && selectedChoice < visibleChoices.Count)
+        {
+            PickChoice(entry, visibleChoices[selectedChoice]);
+        }
+    }
+
+    /// <summary>Индексы вариантов, прошедших условие показа, — в порядке отображения.</summary>
+    private void RefreshVisibleChoices(DialogueEntry entry)
+    {
+        visibleChoices.Clear();
+        for (int i = 0; i < entry.choices.Count; i++)
+        {
+            if (DialogueConditions.Evaluate(entry.choices[i].condition))
+            {
+                visibleChoices.Add(i);
+            }
         }
     }
 
@@ -196,6 +260,8 @@ public sealed class DialogueManager : MonoBehaviour
 
         entryIndex++;
         revealed = 0f;
+        selectedChoice = -1;
+        entryShownAt = Time.unscaledTime;
 
         if (entryIndex >= script.entries.Count)
         {
@@ -239,13 +305,7 @@ public sealed class DialogueManager : MonoBehaviour
         if (queue.Count > 0)
         {
             var next = queue.Dequeue();
-
-            script = next.script;
-            entryIndex = 0;
-            revealed = 0f;
-            onFinished = next.finished;
-            InteractionLock.Add("dialogue");
-            DialogueStarted?.Invoke(script);
+            Begin(next.script, next.finished);
         }
     }
 
@@ -255,6 +315,8 @@ public sealed class DialogueManager : MonoBehaviour
         InteractionLock.Remove("dialogue");
     }
 
+    // ───────────────────────── Отрисовка ─────────────────────────
+
     private void OnGUI()
     {
         if (script == null)
@@ -262,124 +324,220 @@ public sealed class DialogueManager : MonoBehaviour
             return;
         }
 
-        // Масштаб интерфейса от высоты экрана: на 1440p/4K старый фиксированный размер был нечитаем.
-        float scale = Mathf.Clamp(Screen.height / 900f, 1f, 2.2f);
-        EnsureStyles(scale);
-
+        float s = UiTheme.Scale;
         DialogueEntry entry = script.entries[entryIndex];
-        string fullText = entry.IsChoice ? "" : entry.text;
-        bool fullyRevealed = string.IsNullOrEmpty(fullText) || revealed >= fullText.Length;
-        string shownText = fullText == null ? "" : (fullyRevealed ? fullText : fullText.Substring(0, Mathf.FloorToInt(Mathf.Min(revealed, fullText.Length))));
 
-        int visibleChoices = 0;
-        if (entry.IsChoice)
-        {
-            for (int i = 0; i < entry.choices.Count; i++)
-            {
-                if (DialogueConditions.Evaluate(entry.choices[i].condition))
-                {
-                    visibleChoices++;
-                }
-            }
-        }
+        // Плавное появление окна: лёгкий подъём снизу и проявление.
+        float appear = Mathf.Clamp01((Time.unscaledTime - openedAt) / 0.2f);
+        appear = 1f - (1f - appear) * (1f - appear);
+        Color previousColor = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, appear);
 
-        float width = Mathf.Min(Screen.width * 0.7f, 900f * scale);
-        float height = entry.IsChoice
-            ? (76f + Mathf.Max(1, visibleChoices) * 58f) * scale
-            : 180f * scale;
-        Rect panel = new Rect((Screen.width - width) * 0.5f, Screen.height - height - 40f * scale, width, height);
-        GUI.Box(panel, GUIContent.none, panelStyle);
+        float width = Mathf.Min(Screen.width * 0.72f, 980f * s);
+        float pad = 28f * s;
+        float x = (Screen.width - width) * 0.5f;
+        float bottom = Screen.height - 44f * s + (1f - appear) * 18f * s;
 
-        float innerX = panel.x + 24f * scale;
-        float innerW = panel.width - 48f * scale;
+        Rect panel = entry.IsChoice
+            ? DrawChoices(entry, x, bottom, width, pad, s)
+            : DrawLine(entry, x, bottom, width, pad, s);
 
         if (!string.IsNullOrEmpty(script.header))
         {
-            GUI.Label(new Rect(innerX, panel.y - 34f * scale, innerW, 30f * scale), script.header, speakerStyle);
+            DrawHeader(script.header, panel, s);
         }
 
-        if (!entry.IsChoice)
-        {
-            float y = panel.y + 14f * scale;
-            if (!string.IsNullOrEmpty(entry.speaker))
-            {
-                GUI.Label(new Rect(innerX, y, innerW, 32f * scale), entry.speaker, speakerStyle);
-                y += 32f * scale;
-            }
-
-            GUI.Label(new Rect(innerX, y, innerW, panel.yMax - y - 44f * scale), shownText, textStyle);
-
-            if (fullyRevealed)
-            {
-                GUI.Label(new Rect(panel.xMax - 260f * scale, panel.yMax - 36f * scale, 240f * scale, 28f * scale),
-                    "E / Space — далее", choiceStyle);
-            }
-        }
-        else
-        {
-            GUI.Label(new Rect(innerX, panel.y + 12f * scale, innerW, 30f * scale), "Выберите ответ (1-4):", speakerStyle);
-            int shown = 0;
-            for (int i = 0; i < entry.choices.Count; i++)
-            {
-                DialogueChoice choice = entry.choices[i];
-                if (!DialogueConditions.Evaluate(choice.condition))
-                {
-                    continue;
-                }
-
-                Rect button = new Rect(innerX, panel.y + (52f + shown * 58f) * scale, innerW, 50f * scale);
-                string label = $"{i + 1}. {choice.label}";
-                if (GUI.Button(button, label, choiceStyle))
-                {
-                    PickChoice(entry, i);
-                    break;
-                }
-
-                shown++;
-            }
-        }
+        GUI.color = previousColor;
     }
 
-    private float styleScale = -1f;
-
-    private void EnsureStyles(float scale)
+    private Rect DrawLine(DialogueEntry entry, float x, float bottom, float width, float pad, float s)
     {
-        if (panelStyle != null && Mathf.Abs(styleScale - scale) < 0.01f)
+        bool hasSpeaker = !string.IsNullOrEmpty(entry.speaker);
+        string fullText = entry.text ?? "";
+        bool fullyRevealed = revealed >= fullText.Length;
+        float innerW = width - pad * 2f;
+
+        // Ремарки и мысли (без говорящего) — холодным курсивом, реплики — обычным текстом.
+        GUIStyle textStyle = hasSpeaker
+            ? UiTheme.Label(23f, UiTheme.Text, wordWrap: true)
+            : UiTheme.Label(22f, UiTheme.Ice, FontStyle.Italic, wordWrap: true);
+        textStyle.richText = true;
+
+        float topPad = hasSpeaker ? 36f * s : 24f * s;
+        float bottomPad = 40f * s;
+        float textHeight = textStyle.CalcHeight(new GUIContent(fullText), innerW);
+        float height = Mathf.Max(150f * s, topPad + textHeight + bottomPad);
+
+        Rect panel = new Rect(x, bottom - height, width, height);
+        UiTheme.Frame(panel, UiTheme.Night, UiTheme.Cream);
+
+        // Недопечатанный хвост рисуем прозрачным: переносы строк не «прыгают» по мере печати.
+        string shown = fullText;
+        if (!fullyRevealed)
         {
-            return;
+            int count = Mathf.Clamp(Mathf.FloorToInt(revealed), 0, fullText.Length);
+            shown = fullText.Substring(0, count) + "<color=#00000000>" + fullText.Substring(count) + "</color>";
         }
 
-        styleScale = scale;
+        GUI.Label(new Rect(panel.x + pad, panel.y + topPad, innerW, textHeight), shown, textStyle);
 
-        if (panelTexture == null)
+        if (hasSpeaker)
         {
-            panelTexture = new Texture2D(1, 1);
-            panelTexture.SetPixel(0, 0, new Color(0.03f, 0.05f, 0.08f, 0.94f));
-            panelTexture.Apply();
+            DrawNamePlate(entry.speaker, panel, s);
         }
 
-        int body = Mathf.RoundToInt(20f * scale);
-        int head = Mathf.RoundToInt(22f * scale);
+        if (fullyRevealed)
+        {
+            DrawContinueHint(panel, pad, s);
+        }
 
-        panelStyle = new GUIStyle(GUI.skin.box) { normal = { background = panelTexture } };
-        speakerStyle = new GUIStyle(GUI.skin.label)
+        return panel;
+    }
+
+    private Rect DrawChoices(DialogueEntry entry, float x, float bottom, float width, float pad, float s)
+    {
+        RefreshVisibleChoices(entry);
+        float innerW = width - pad * 2f;
+
+        // Над вариантами оставляем реплику, на которую отвечаем, — иначе вопрос пропадает с экрана.
+        DialogueEntry question = entryIndex > 0 ? script.entries[entryIndex - 1] : null;
+        string questionText = null;
+        if (question != null && !question.IsChoice && !string.IsNullOrEmpty(question.text))
         {
-            fontSize = head,
-            fontStyle = FontStyle.Bold,
-            normal = { textColor = new Color(0.95f, 0.9f, 0.8f) }
-        };
-        textStyle = new GUIStyle(GUI.skin.label)
+            questionText = string.IsNullOrEmpty(question.speaker)
+                ? question.text
+                : $"{question.speaker}: {question.text}";
+        }
+
+        GUIStyle questionStyle = UiTheme.Label(19f, UiTheme.Muted, wordWrap: true);
+        GUIStyle choiceStyle = UiTheme.Label(22f, UiTheme.Text, alignment: TextAnchor.MiddleLeft, wordWrap: true);
+        GUIStyle badgeStyle = UiTheme.Label(21f, UiTheme.Outline, FontStyle.Bold, TextAnchor.MiddleCenter);
+        GUIStyle hintStyle = UiTheme.Label(16f, UiTheme.Muted, alignment: TextAnchor.MiddleRight);
+
+        float badge = 30f * s;
+        float rowPad = 12f * s;
+        float gap = 8f * s;
+        float labelW = innerW - badge - rowPad * 3f;
+        float topPad = 34f * s;
+        float hintH = 34f * s;
+
+        float questionH = questionText != null
+            ? questionStyle.CalcHeight(new GUIContent(questionText), innerW) + 12f * s
+            : 0f;
+
+        float rowsH = 0f;
+        for (int i = 0; i < visibleChoices.Count; i++)
         {
-            fontSize = body,
-            wordWrap = true,
-            normal = { textColor = Color.white }
-        };
-        choiceStyle = new GUIStyle(GUI.skin.button)
+            rowsH += RowHeight(entry.choices[visibleChoices[i]].label, choiceStyle, labelW, s) + gap;
+        }
+
+        float height = topPad + questionH + rowsH + hintH;
+        Rect panel = new Rect(x, bottom - height, width, height);
+        UiTheme.Frame(panel, UiTheme.Night, UiTheme.Cream);
+        DrawNamePlate(AnswerPlate, panel, s);
+
+        float y = panel.y + topPad;
+        if (questionText != null)
         {
-            fontSize = body,
-            alignment = TextAnchor.MiddleLeft,
-            wordWrap = true,
-            padding = new RectOffset(Mathf.RoundToInt(12f * scale), Mathf.RoundToInt(12f * scale), 4, 4)
-        };
+            GUI.Label(new Rect(panel.x + pad, y, innerW, questionH), questionText, questionStyle);
+            y += questionH;
+        }
+
+        Event e = Event.current;
+        bool mouseFree = Cursor.lockState != CursorLockMode.Locked;
+
+        for (int i = 0; i < visibleChoices.Count; i++)
+        {
+            DialogueChoice choice = entry.choices[visibleChoices[i]];
+            float rowH = RowHeight(choice.label, choiceStyle, labelW, s);
+            Rect row = new Rect(panel.x + pad, y, innerW, rowH);
+
+            // Свободный курсор подсвечивает строку под собой; при захваченном работают клавиши.
+            if (mouseFree && e.type == EventType.MouseMove && row.Contains(e.mousePosition))
+            {
+                selectedChoice = i;
+            }
+
+            bool selected = i == selectedChoice;
+            UiTheme.Frame(row,
+                selected ? UiTheme.EmberDark : UiTheme.NightSoft,
+                selected ? UiTheme.Ember : UiTheme.Frost);
+
+            Rect badgeRect = new Rect(row.x + rowPad, row.y + (rowH - badge) * 0.5f, badge, badge);
+            UiTheme.Fill(badgeRect, selected ? UiTheme.Ember : UiTheme.Cream);
+            GUI.Label(badgeRect, (i + 1).ToString(), badgeStyle);
+
+            choiceStyle.normal.textColor = selected ? UiTheme.Cream : UiTheme.Text;
+            GUI.Label(new Rect(badgeRect.xMax + rowPad, row.y, labelW, rowH), choice.label, choiceStyle);
+
+            if (e.type == EventType.MouseDown && e.button == 0 && row.Contains(e.mousePosition))
+            {
+                e.Use();
+                PickChoice(entry, visibleChoices[i]);
+                return panel;
+            }
+
+            y += rowH + gap;
+        }
+
+        string hint = visibleChoices.Count > 1
+            ? $"1–{visibleChoices.Count} — ответить  ·  стрелки + E — выбрать"
+            : "1 — ответить";
+        GUI.Label(new Rect(panel.x + pad, panel.yMax - hintH - 2f * s, innerW, hintH), hint, hintStyle);
+
+        return panel;
+    }
+
+    private static float RowHeight(string label, GUIStyle style, float labelWidth, float s)
+    {
+        return Mathf.Max(46f * s, style.CalcHeight(new GUIContent(label), labelWidth) + 18f * s);
+    }
+
+    /// <summary>Плашка с именем «сидит» на верхней кромке панели. Котов — холодный, остальные — тёплые.</summary>
+    private static void DrawNamePlate(string speaker, Rect panel, float s)
+    {
+        GUIStyle style = UiTheme.Label(21f, UiTheme.Outline, FontStyle.Bold, TextAnchor.MiddleCenter);
+        float plateW = style.CalcSize(new GUIContent(speaker)).x + 36f * s;
+        float plateH = 36f * s;
+        Rect plate = new Rect(panel.x + 22f * s, panel.y - plateH * 0.5f, plateW, plateH);
+
+        Color fill = speaker == "КОТОВ" ? UiTheme.Ice : speaker == AnswerPlate ? UiTheme.Cream : UiTheme.Ember;
+        UiTheme.Frame(plate, fill, fill);
+        GUI.Label(plate, speaker, style);
+    }
+
+    /// <summary>Ремарка сцены над окном диалога — на собственной подложке, чтобы читалась на снегу.</summary>
+    private static void DrawHeader(string header, Rect panel, float s)
+    {
+        GUIStyle style = UiTheme.Label(18f, UiTheme.Muted, FontStyle.Italic, TextAnchor.MiddleCenter, true);
+        float padX = 18f * s;
+        float maxTextW = panel.width - 80f * s - padX * 2f;
+        float textW = Mathf.Min(style.CalcSize(new GUIContent(header)).x + 2f, maxTextW);
+        float textH = style.CalcHeight(new GUIContent(header), textW);
+        float stripW = textW + padX * 2f;
+        float stripH = textH + 16f * s;
+
+        Rect strip = new Rect(panel.x + (panel.width - stripW) * 0.5f, panel.y - stripH - 30f * s, stripW, stripH);
+        UiTheme.Frame(strip, new Color(UiTheme.Night.r, UiTheme.Night.g, UiTheme.Night.b, 0.8f), UiTheme.Frost);
+        GUI.Label(new Rect(strip.x + padX, strip.y, textW, stripH), header, style);
+    }
+
+    /// <summary>Покачивающаяся стрелка «дальше» и подпись клавиши.</summary>
+    private void DrawContinueHint(Rect panel, float pad, float s)
+    {
+        GUIStyle hintStyle = UiTheme.Label(16f, UiTheme.Muted, alignment: TextAnchor.MiddleRight);
+        int px = UiTheme.PixelSize;
+        float bob = Mathf.Round(Mathf.PingPong((Time.unscaledTime - entryShownAt) * 2.4f, 1f) * 2f) * px;
+
+        float arrowW = 7 * px;
+        float arrowX = panel.xMax - pad - arrowW;
+        float arrowY = panel.yMax - 28f * s + bob;
+        for (int i = 0; i < 4; i++)
+        {
+            UiTheme.Fill(new Rect(arrowX + i * px, arrowY + i * px, arrowW - i * 2 * px, px), UiTheme.Ember);
+        }
+
+        GUI.Label(new Rect(panel.x + pad, panel.yMax - 38f * s, panel.width - pad * 2f - arrowW - 10f * s, 28f * s),
+            "E / Space", hintStyle);
     }
 }
