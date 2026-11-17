@@ -85,7 +85,6 @@ public sealed class ServiceDirector : MonoBehaviour
         SceneManager.sceneLoaded += OnSceneLoaded;
         truckArrival = gameObject.AddComponent<TruckArrivalController>();
         EnsurePumps(SceneManager.GetActiveScene());
-        EnsureShop(SceneManager.GetActiveScene());
     }
 
     private void OnDestroy()
@@ -105,7 +104,6 @@ public sealed class ServiceDirector : MonoBehaviour
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         EnsurePumps(scene);
-        EnsureShop(scene);
 
         if (CurrentOrder == null || truckArrival == null)
         {
@@ -626,102 +624,5 @@ public sealed class ServiceDirector : MonoBehaviour
         {
             CollectByName(root.GetChild(i), sink, match);
         }
-    }
-
-    /// <summary>Магазин создаётся только в интерьерной сцене (полка + стойка с рычагом кассы).</summary>
-    private void EnsureShop(Scene scene)
-    {
-        if (!scene.IsValid() || !scene.isLoaded || !scene.name.ToLowerInvariant().Contains("interior"))
-        {
-            return;
-        }
-
-        // После выхода из магазина объекты уничтожены вместе со сценой, но остаются в списке:
-        // чистим мёртвые ссылки, иначе при повторном заходе полка и стойка не создаются.
-        runtimeShop.RemoveAll(go => go == null);
-
-        if (runtimeShop.Count > 0)
-        {
-            return;
-        }
-
-        int layer = LayerMask.NameToLayer("Interactable");
-        if (layer < 0)
-        {
-            layer = 0;
-        }
-
-        GameObject shelf = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        shelf.name = "ShopShelf";
-        shelf.transform.position = new Vector3(3f, 1f, -3.5f);
-        shelf.transform.localScale = new Vector3(1.6f, 0.1f, 0.6f);
-        shelf.layer = layer;
-        shelf.AddComponent<ShopShelfInteractable>();
-        ProximityInteractable.EnsureOn(shelf, 2.2f);
-
-        GameObject counter = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        counter.name = "ShopCounter";
-        counter.transform.position = new Vector3(0f, 1f, 0f);
-        counter.transform.localScale = new Vector3(2.2f, 0.1f, 0.8f);
-        counter.layer = layer;
-        counter.AddComponent<ShopCounterInteractable>();
-        ProximityInteractable.EnsureOn(counter, 2.2f);
-
-        runtimeShop.Add(shelf);
-        runtimeShop.Add(counter);
-        Debug.Log("[Snowpaw Station] Магазин в интерьере создан в рантайме: полка + стойка.");
-    }
-}
-
-/// <summary>Полка магазина: E — взять нужный товар (кофе, печенье, сигареты, грелка...).</summary>
-[DisallowMultipleComponent]
-public sealed class ShopShelfInteractable : MonoBehaviour, IInteractable
-{
-    public string GetInteractPrompt()
-    {
-        ServiceDirector service = ServiceDirector.Instance;
-        if (service == null || service.CurrentOrder == null || string.IsNullOrEmpty(service.CurrentOrder.item))
-        {
-            return "[E] Полка с товаром";
-        }
-
-        return !string.IsNullOrEmpty(service.CarriedGood)
-            ? $"В лапах: {Goods.DisplayName(service.CarriedGood)} — несите на стойку"
-            : $"[E] Взять {Goods.DisplayName(service.CurrentOrder.item)} с полки";
-    }
-
-    public void Interact()
-    {
-        ServiceDirector service = ServiceDirector.Instance;
-        if (service == null || service.CurrentOrder == null)
-        {
-            return;
-        }
-
-        string need = service.CurrentOrder.item;
-        if (string.IsNullOrEmpty(need) || !string.IsNullOrEmpty(service.CarriedGood))
-        {
-            return;
-        }
-
-        service.TakeGood(need);
-    }
-}
-
-/// <summary>Стойка с рычагом кассы: E — подтвердить товар (товар → клиенту).</summary>
-[DisallowMultipleComponent]
-public sealed class ShopCounterInteractable : MonoBehaviour, IInteractable
-{
-    public string GetInteractPrompt()
-    {
-        ServiceDirector service = ServiceDirector.Instance;
-        return service != null && !string.IsNullOrEmpty(service.CarriedGood)
-            ? $"[E] Подтвердить: {Goods.DisplayName(service.CarriedGood)} (касса)"
-            : "[E] Стойка с кассой";
-    }
-
-    public void Interact()
-    {
-        ServiceDirector.Instance?.ConfirmOnCounter();
     }
 }
