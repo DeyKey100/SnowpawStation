@@ -432,6 +432,7 @@ public sealed class KotovVisit : MonoBehaviour
             "*Три тихих стука в дверь*", new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
+                font = UiTheme.Font,
                 fontSize = 20,
                 normal = { textColor = new Color(0.9f, 0.9f, 1f) }
             });

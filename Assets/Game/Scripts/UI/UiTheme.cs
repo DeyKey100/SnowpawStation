@@ -41,7 +41,7 @@ public static class UiTheme
             if (!fontLoaded)
             {
                 fontLoaded = true;
-                font = Resources.Load<Font>("Fonts/PixelifySans");
+                font = Resources.Load<Font>("Fonts/CrispPixel");
             }
 
             return font;
@@ -59,12 +59,12 @@ public static class UiTheme
 
     /// <summary>Базовый текстовый стиль темы.</summary>
     public static GUIStyle Label(float size, Color color, FontStyle fontStyle = FontStyle.Normal,
-        TextAnchor alignment = TextAnchor.UpperLeft, bool wordWrap = false)
+        TextAnchor alignment = TextAnchor.UpperLeft, bool wordWrap = false, bool scaleWithScreen = true)
     {
         GUIStyle style = new GUIStyle(GUIStyle.none)
         {
             font = Font,
-            fontSize = Mathf.RoundToInt(size * Scale),
+            fontSize = Mathf.RoundToInt(size * (scaleWithScreen ? Scale : 1f)),
             fontStyle = fontStyle,
             alignment = alignment,
             wordWrap = wordWrap,
@@ -72,6 +72,13 @@ public static class UiTheme
         };
         style.normal.textColor = color;
         return style;
+    }
+
+    /// <summary>Высота текста с учётом метрик шрифта и переноса, с запасом для краёв глифов.</summary>
+    public static float TextHeight(GUIStyle style, string text, float width)
+    {
+        return Mathf.Ceil(Mathf.Max(style.lineHeight,
+            style.CalcHeight(new GUIContent(text), Mathf.Max(1f, width)))) + 4f;
     }
 
     /// <summary>Панель со срезанными углами: тёмный контур, цветная рамка, заливка.</summary>

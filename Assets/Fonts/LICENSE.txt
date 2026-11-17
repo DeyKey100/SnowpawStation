@@ -1,0 +1,20 @@
+CRISP PIXEL FONTS - FONT LICENCE
+
+You MAY:
+  - use these fonts in any number of commercial or non-commercial projects
+    (games, apps, websites, videos, streams, game jams)
+  - embed the font files (TTF, OTF, BMFont) in the games and apps you ship
+  - make images with them (logos, titles, posters, store art)
+  - edit or extend them for your own project
+  - use them without credit (credit is appreciated, never required)
+
+You may NOT:
+  - resell, redistribute or give away the fonts themselves, on their own or as
+    part of another font collection, asset pack, UI kit or template, modified or not
+  - claim the fonts as your own original work
+
+In short: put them in the things you make, just don't sell or share the font files
+as fonts.
+
+Every glyph was drawn as rows of pixels in code (written by Claude,
+an AI assistant). No image generators, no traced or third-party fonts.

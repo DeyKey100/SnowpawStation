@@ -1,0 +1,31 @@
+[
+ {
+  "key": "ui",
+  "name": "Crisp Pixel",
+  "file": "CrispPixel",
+  "theme": "Clean 8 px UI face: menus, buttons, inventory text, dialogue.",
+  "em": 8,
+  "cap": 7,
+  "x": 5,
+  "ascent": 10,
+  "descent": 2,
+  "line_gap": 0,
+  "line": 12,
+  "glyphs": 324,
+  "kerning_pairs": 923,
+  "mono": false,
+  "digit_width": 6,
+  "space": 3,
+  "bmfont_page": [
+   256,
+   128
+  ],
+  "sizes": [
+   8,
+   16,
+   24,
+   32
+  ],
+  "accented_drawn": 0
+ }
+]

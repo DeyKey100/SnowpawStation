@@ -88,21 +88,29 @@ public sealed class NotebookUI : MonoBehaviour
 
         GUI.Box(panel, GUIContent.none);
         int day = DayLoopManager.Instance != null ? DayLoopManager.Instance.CurrentDay : 1;
-        GUI.Label(new Rect(panel.x + 16f, panel.y + 10f, w - 32f, 28f),
-            $"Записная книжка — День {day}", Title());
+        string heading = $"Записная книжка — День {day}";
+        float titleHeight = UiTheme.TextHeight(Title(), heading, w - 32f);
+        GUI.Label(new Rect(panel.x + 16f, panel.y + 10f, w - 32f, titleHeight), heading, Title());
 
-        float tabY = panel.y + 44f;
+        GUIStyle tabStyle = UiTheme.Label(15f, UiTheme.Text, alignment: TextAnchor.MiddleCenter,
+            scaleWithScreen: false);
+        float tabWidth = (w - 32f) / TabNames.Length;
+        float tabHeight = UiTheme.TextHeight(tabStyle, "Смена Письма Наблюдения", tabWidth);
+        float tabY = panel.y + 16f + titleHeight;
         for (int i = 0; i < TabNames.Length; i++)
         {
-            if (GUI.Button(new Rect(panel.x + 16f + i * 150f, tabY, 140f, 30f),
-                    (i == tab ? "● " : "") + TabNames[i]))
+            Rect tabRect = new Rect(panel.x + 16f + i * tabWidth, tabY, tabWidth - 4f, tabHeight);
+            GUI.Box(tabRect, GUIContent.none);
+            GUI.Label(tabRect, (i == tab ? "● " : "") + TabNames[i], tabStyle);
+            if (GUI.Button(tabRect, GUIContent.none, GUIStyle.none))
             {
                 tab = i;
                 scroll = Vector2.zero;
             }
         }
 
-        Rect content = new Rect(panel.x + 16f, tabY + 40f, w - 48f, h - 110f);
+        float contentY = tabY + tabHeight + 10f;
+        Rect content = new Rect(panel.x + 16f, contentY, w - 48f, Mathf.Max(1f, panel.yMax - contentY - 16f));
         float contentHeight = ContentHeight();
         float maxScroll = Mathf.Max(0f, contentHeight - content.height);
 
@@ -123,8 +131,9 @@ public sealed class NotebookUI : MonoBehaviour
         }
         GUI.EndScrollView();
 
-        GUI.Label(new Rect(panel.x, panel.yMax + 6f, w, 22f),
-            "Tab — закрыть · 1/2/3 — вкладки", Small());
+        const string footer = "Tab — закрыть · 1/2/3 — вкладки";
+        GUI.Label(new Rect(panel.x, panel.yMax + 6f, w, UiTheme.TextHeight(Small(), footer, w)),
+            footer, Small());
 
         HandleTabKeys();
     }
@@ -140,89 +149,65 @@ public sealed class NotebookUI : MonoBehaviour
 #endif
     }
 
-    private float ContentHeight()
+    // Один проход раскладки для измерения и рисования: прокрутка включает все строки и переносы.
+    private float ContentWidth => Mathf.Max(1f, Mathf.Min(560f, Screen.width - 80f) - 68f);
+
+    private float ContentHeight() => DrawContent(false);
+    private void DrawShiftTab() => DrawContent(true);
+    private void DrawLettersTab() => DrawContent(true);
+    private void DrawObservationsTab() => DrawContent(true);
+
+    private float DrawContent(bool draw)
     {
+        float y = 4f;
         switch (tab)
         {
-            case 0: return 24f * (GameState.GetShiftLog().Count + GameState.GetNotes().Count + 2);
-            case 1: return 140f * GameState.LetterCount;
-            default: return 24f * (GameState.GetObservations().Count + 1);
+            case 0:
+                ContentLabel("Журнал смены", Title(), ref y, draw);
+                var log = GameState.GetShiftLog();
+                if (log.Count == 0) ContentLabel("— пусто —", Small(), ref y, draw);
+                for (int i = 0; i < log.Count; i++) ContentLabel(log[i], Small(), ref y, draw);
+                y += 8f;
+                ContentLabel("Заметки", Title(), ref y, draw);
+                var notes = GameState.GetNotes();
+                if (notes.Count == 0) ContentLabel("— пусто —", Small(), ref y, draw);
+                for (int i = 0; i < notes.Count; i++) ContentLabel(notes[i], Small(), ref y, draw);
+                break;
+            case 1:
+                for (int n = 1; n <= GameState.LetterCount; n++)
+                {
+                    ContentLabel($"Письмо №{n}", Title(), ref y, draw);
+                    ContentLabel(GameState.HasLetter(n) ? Letters.RenderForNotebook(n) : "— не получено —",
+                        Small(), ref y, draw);
+                    y += 8f;
+                }
+                break;
+            default:
+                var observations = GameState.GetObservations();
+                if (observations.Count == 0) ContentLabel("— пусто —", Small(), ref y, draw);
+                for (int i = 0; i < observations.Count; i++)
+                    ContentLabel("• " + observations[i], Small(), ref y, draw);
+                break;
         }
+        return y + 4f;
     }
 
-    private void DrawShiftTab()
+    private void ContentLabel(string text, GUIStyle style, ref float y, bool draw)
     {
-        float y = 0f;
-        y = Section("Журнал смены", y);
-        var log = GameState.GetShiftLog();
-        if (log.Count == 0)
-        {
-            GUI.Label(new Rect(8f, y, 480f, 22f), "— пусто —", Small());
-            y += 24f;
-        }
-        for (int i = 0; i < log.Count; i++)
-        {
-            GUI.Label(new Rect(8f, y, 480f, 22f), log[i], Small());
-            y += 24f;
-        }
-
-        y = Section("Заметки", y + 8f);
-        var notes = GameState.GetNotes();
-        if (notes.Count == 0)
-        {
-            GUI.Label(new Rect(8f, y, 480f, 22f), "— пусто —", Small());
-            return;
-        }
-        for (int i = 0; i < notes.Count; i++)
-        {
-            GUI.Label(new Rect(8f, y, 480f, 22f), notes[i], Small());
-            y += 24f;
-        }
-    }
-
-    private void DrawLettersTab()
-    {
-        float y = 0f;
-        for (int n = 1; n <= GameState.LetterCount; n++)
-        {
-            GUI.Label(new Rect(8f, y, 480f, 24f), $"Письмо №{n}", Title());
-            y += 26f;
-            string body = GameState.HasLetter(n)
-                ? Letters.RenderForNotebook(n)
-                : "— не получено —";
-            Rect r = new Rect(8f, y, 480f, 100f);
-            GUI.Label(r, body, Small());
-            y += 110f;
-        }
-    }
-
-    private void DrawObservationsTab()
-    {
-        float y = 0f;
-        var obs = GameState.GetObservations();
-        if (obs.Count == 0)
-        {
-            GUI.Label(new Rect(8f, y, 480f, 22f), "— пусто —", Small());
-            return;
-        }
-        for (int i = 0; i < obs.Count; i++)
-        {
-            GUI.Label(new Rect(8f, y, 480f, 22f), "• " + obs[i], Small());
-            y += 24f;
-        }
-    }
-
-    private float Section(string title, float y)
-    {
-        GUI.Label(new Rect(0f, y, 480f, 24f), title, Title());
-        return y + 26f;
+        float width = Mathf.Max(1f, ContentWidth - 8f);
+        float height = UiTheme.TextHeight(style, text, width);
+        if (draw) GUI.Label(new Rect(8f, y, width, height), text, style);
+        y += height + 4f;
     }
 
     private void DrawHint()
     {
         if (open) return;
-        GUI.Label(new Rect(Screen.width - 230f, Screen.height - 40f, 220f, 24f),
-            "[Tab] Записная книжка", Small());
+        const string hint = "[Tab] Записная книжка";
+        float width = Mathf.Min(Screen.width - 24f, Mathf.Max(220f, Small().CalcSize(new GUIContent(hint)).x));
+        float height = UiTheme.TextHeight(Small(), hint, width);
+        GUI.Label(new Rect(Screen.width - width - 12f, Screen.height - height - 12f, width, height),
+            hint, Small());
     }
 
     private GUIStyle titleStyle;
@@ -232,11 +217,8 @@ public sealed class NotebookUI : MonoBehaviour
     {
         if (titleStyle == null)
         {
-            titleStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 18, fontStyle = FontStyle.Bold,
-                normal = { textColor = new Color(0.95f, 0.9f, 0.8f) }
-            };
+            titleStyle = UiTheme.Label(18f, new Color(0.95f, 0.9f, 0.8f),
+                FontStyle.Bold, wordWrap: true, scaleWithScreen: false);
         }
         return titleStyle;
     }
@@ -245,11 +227,8 @@ public sealed class NotebookUI : MonoBehaviour
     {
         if (smallStyle == null)
         {
-            smallStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 15, wordWrap = true,
-                normal = { textColor = new Color(0.85f, 0.85f, 0.88f) }
-            };
+            smallStyle = UiTheme.Label(15f, new Color(0.85f, 0.85f, 0.88f),
+                wordWrap: true, scaleWithScreen: false);
         }
         return smallStyle;
     }
