@@ -127,7 +127,7 @@ public sealed class DialogueManager : MonoBehaviour
             revealed += TextSpeed * Time.unscaledDeltaTime;
         }
 
-        if (Time.frameCount == inputBlockedFrame || PauseMenu.IsPaused)
+        if (Time.frameCount == inputBlockedFrame || PauseMenu.IsPaused || AdminPanel.IsOpen)
         {
             return;
         }
@@ -277,6 +277,15 @@ public sealed class DialogueManager : MonoBehaviour
             pendingFinishId = script.id;
             Finish();
         }
+    }
+
+    internal void DiscardForDaySkip()
+    {
+        script = null;
+        onFinished = null;
+        pendingFinishId = null;
+        queue.Clear();
+        InteractionLock.Remove("dialogue");
     }
 
     private void Finish()

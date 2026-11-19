@@ -21,7 +21,7 @@ public class ProximityInteractable : MonoBehaviour
     [SerializeField] private float fallbackHeight = 1.9f;
 
     [Header("Proximity")]
-    [SerializeField] private float activateDistance = 2.2f;
+    [SerializeField] private float activateDistance = 2f;
     [SerializeField] private float maxVerticalDifference = 3f;
     [Tooltip("Больше — важнее. При равной близости выигрывает маркер с высоким приоритетом:\n" +
              "так записка на столе перебивает стойку и полку, рядом с которыми лежит.")]

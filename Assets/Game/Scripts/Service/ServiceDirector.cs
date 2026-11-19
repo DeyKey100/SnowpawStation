@@ -100,7 +100,12 @@ public sealed class ServiceDirector : MonoBehaviour
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 
-    private void OnDayStarted(int day) => CurrentState = "morning";
+    private void OnDayStarted(int day)
+    {
+        CurrentState = "morning";
+        queue.Clear();
+        truckArrival?.CancelArrival();
+    }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
@@ -173,7 +178,7 @@ public sealed class ServiceDirector : MonoBehaviour
         CurrentState == "shift" &&
         DayLoopManager.Instance != null &&
         DayLoopManager.Instance.CurrentState == DayLoopManager.DayState.WorkShift &&
-        GameState.IsDayEventDone(KeeperNoteInteractable.ReadEventId) &&
+        (DayLoopManager.Instance.CurrentDay != 1 || GameState.IsDayEventDone(KeeperNoteInteractable.ReadEventId)) &&
         !SceneLoadingScreen.IsLoading &&
         !SceneManager.GetActiveScene().name.ToLowerInvariant().Contains("interior");
 
@@ -440,6 +445,34 @@ public sealed class ServiceDirector : MonoBehaviour
         }
 
         CompleteOrder();
+    }
+
+    internal bool TrySkipCurrentOrder()
+    {
+        if (DayLoopManager.Instance == null ||
+            DayLoopManager.Instance.CurrentState != DayLoopManager.DayState.WorkShift ||
+            DialogueManager.IsActive || CurrentOrder == null ||
+            (CurrentStage != OrderStage.Arriving && CurrentStage != OrderStage.Refueling &&
+             CurrentStage != OrderStage.AwaitingItem))
+        {
+            return false;
+        }
+
+        if (arrivalRoutine != null)
+        {
+            StopCoroutine(arrivalRoutine);
+            arrivalRoutine = null;
+        }
+
+        truckArrival?.CancelArrival();
+        CarriedGood = null;
+        if (CurrentStage != OrderStage.AwaitingItem)
+        {
+            AdvanceClock();
+        }
+
+        CompleteOrder();
+        return true;
     }
 
     private void CompleteOrder()

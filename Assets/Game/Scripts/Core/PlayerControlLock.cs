@@ -16,6 +16,8 @@ public static class PlayerControlLock
     /// <summary>Управление заморожено (хотя бы один держатель).</summary>
     public static bool IsLocked => Holders.Count > 0;
 
+    internal static bool IsHeldBy(string holder) => Holders.Contains(holder);
+
     /// <summary>Взвести замок. Повторное добавление того же id безопасно.</summary>
     public static void Add(string holder)
     {
