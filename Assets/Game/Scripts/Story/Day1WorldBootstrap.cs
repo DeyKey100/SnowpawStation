@@ -13,9 +13,15 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
 {
     private GameObject note;
     private GameObject shed;
+    private DayLoopManager dayManager;
 
     private void Start()
     {
+        // Координатор сохраняется вместе с bootstrap, сами сугробы живут в StationMain.
+        if (!TryGetComponent<SnowPileSpawner>(out _))
+        {
+            gameObject.AddComponent<SnowPileSpawner>();
+        }
         SceneManager.sceneLoaded += OnSceneLoaded;
         OnSceneLoaded(SceneManager.GetActiveScene(), LoadSceneMode.Single);
     }
@@ -23,6 +29,42 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
     private void OnDestroy()
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
+        if (dayManager != null)
+        {
+            dayManager.DayStarted -= OnDayStarted;
+        }
+    }
+
+    private void BindDayManager()
+    {
+        DayLoopManager current = DayLoopManager.Instance;
+        if (dayManager == current)
+        {
+            return;
+        }
+        if (dayManager != null)
+        {
+            dayManager.DayStarted -= OnDayStarted;
+        }
+        dayManager = current;
+        if (dayManager != null)
+        {
+            dayManager.DayStarted += OnDayStarted;
+        }
+    }
+
+    private void OnDayStarted(int day)
+    {
+        if (day < 3)
+        {
+            return;
+        }
+        // Дровник нужен и при переходе Д2 -> Д3 во дворе без перезагрузки сцены.
+        Scene station = SceneManager.GetSceneByName("StationMain");
+        if (station.IsValid() && station.isLoaded)
+        {
+            SpawnShed(station);
+        }
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -32,6 +74,7 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
             return;
         }
 
+        BindDayManager();
         string name = scene.name.ToLowerInvariant();
         bool interior = name.Contains("interior");
 
@@ -41,7 +84,7 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
             SpawnNote(scene);
         }
 
-        if (!interior && DayLoopManager.Instance != null && DayLoopManager.Instance.CurrentDay >= 3)
+        if (scene.name == "StationMain" && dayManager != null && dayManager.CurrentDay >= 3)
         {
             SpawnShed(scene);
         }
@@ -96,6 +139,7 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
 
         Transform woodPile = FindInScene(scene, "wood");
         shed = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        SceneManager.MoveGameObjectToScene(shed, scene);
         shed.name = "WoodShed";
         Vector3 pos = woodPile != null
             ? woodPile.position + woodPile.right * 2.5f

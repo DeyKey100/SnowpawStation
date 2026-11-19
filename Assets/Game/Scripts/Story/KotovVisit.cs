@@ -52,6 +52,7 @@ public sealed class KotovVisit : MonoBehaviour
         lookedAwayTimer = 0f;
         pendingVisitDay = 0;
         pendingDoorstepLetter = false;
+        RemoveDoorstepLetter();
     }
 
     private void OnAnyDialogueFinished(DialogueScript finished)
@@ -175,7 +176,7 @@ public sealed class KotovVisit : MonoBehaviour
 
         // Следим за взглядом только пока идёт СВОЙ диалог: иначе «отвести взгляд»
         // обрывало чужую реплику (котлета_farewell), а визит при этом терялся.
-        if (State != VisitState.InProgress || !IsKotovScriptActive)
+        if (State != VisitState.InProgress || !IsKotovScriptActive || AdminPanel.IsOpen)
         {
             return;
         }
@@ -328,9 +329,8 @@ public sealed class KotovVisit : MonoBehaviour
         GameObject letter = GameObject.CreatePrimitive(PrimitiveType.Cube);
         letter.name = "DoorstepLetter";
         letter.transform.SetParent(null);
-        // Письмо лежит у наружного порога; сохраняем координаты найденной двери,
-        // иначе оно возвращается в старую точку x = 0 внутри двора.
-        letter.transform.position = new Vector3(pos.x, 0f, pos.z);
+        // Сохраняем положение у порога по X/Z и поднимаем письмо над землёй.
+        letter.transform.position = new Vector3(pos.x, 0.51f, pos.z);
         letter.transform.localScale = new Vector3(0.3f, 0.04f, 0.22f);
         letter.transform.rotation = Quaternion.Euler(0f, 25f, 0f);
         letter.layer = LayerMask.NameToLayer("Interactable");
@@ -411,14 +411,31 @@ public sealed class KotovVisit : MonoBehaviour
     /// <summary>Перчатка/письмо с порога подобрано — вечер закрыт.</summary>
     public void OnDoorstepLetterTaken(int day)
     {
+        RemoveDoorstepLetter();
+        GameState.GiveLetter(day, Letters.EvaluateClarity(day));
+        DayLoopManager.Instance?.NotifyEveningCompleted();
+    }
+
+    internal bool TryTakeDoorstepLetter()
+    {
+        if (doorstepLetter == null || DialogueManager.IsActive ||
+            DayLoopManager.Instance == null ||
+            DayLoopManager.Instance.CurrentState != DayLoopManager.DayState.Evening)
+        {
+            return false;
+        }
+
+        OnDoorstepLetterTaken(visitDay);
+        return true;
+    }
+
+    private void RemoveDoorstepLetter()
+    {
         if (doorstepLetter != null)
         {
             Destroy(doorstepLetter);
             doorstepLetter = null;
         }
-
-        GameState.GiveLetter(day, Letters.EvaluateClarity(day));
-        DayLoopManager.Instance?.NotifyEveningCompleted();
     }
 
     private void OnGUI()

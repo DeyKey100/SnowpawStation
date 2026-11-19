@@ -84,6 +84,15 @@ public sealed class NightEvents : MonoBehaviour
         DayLoopManager.Instance.NotifyNightCompleted();
     }
 
+    internal void CancelForDaySkip()
+    {
+        running = false;
+        if (dialogue != null)
+        {
+            dialogue.DialogueFinished -= OnNight1Finished;
+        }
+    }
+
     // Заглушки ночи дня 3 (силуэт/следы/финальная карта) — вне текущего этапа (день 1).
     public void HideSilhouette() { }
     public void GoOutAtNight3() { }

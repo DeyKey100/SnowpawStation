@@ -61,11 +61,12 @@ public static class DayPlans
     {
         new MorningTaskDef { id = "chop_logs", label = "Нарубить 3 полена", target = 3 },
         new MorningTaskDef { id = "stove_lit", label = "Разжечь остывшую печь" },
-        new MorningTaskDef { id = "snow_pump1", label = "Расчистить сугроб у колонки №1" },
+        new MorningTaskDef { id = "snow_pump1", label = "Расчистить 2 сугроба на подходе к колонке №1", target = 2 },
     };
 
     private static readonly List<MorningTaskDef> Day3Tasks = new List<MorningTaskDef>
     {
+        new MorningTaskDef { id = "snow_yard", label = "Расчистить 3 сугроба во дворе", target = 3 },
         new MorningTaskDef { id = "woodshed_6", label = "Наполнить дровник до 6 поленьев", target = 6 },
         new MorningTaskDef { id = "keep_warm", label = "Держать тепло в метель (необязательно)", required = false },
     };
@@ -130,6 +131,21 @@ public static class DayPlans
     public static bool IsValidDay(int day) => day >= 1 && day <= DayCount;
 
     public static int GetRegularCarQuota(int day) => Plans[Clamp(day)].quota;
+
+    /// <summary>
+    /// Сугробы: 1 в обучении, 3 во второй день (2 обязательных), 6 в метель (3 обязательных).
+    /// gameplay-day-by-day.md задаёт минимум 1/2, число дня 3 выбрано для играбельности.
+    /// Это визуальный баланс; обязательные цели остаются в morningTasks.
+    /// </summary>
+    public static int GetSnowPileCount(int day)
+    {
+        switch (Clamp(day))
+        {
+            case 1: return 1;
+            case 2: return 3;
+            default: return 6;
+        }
+    }
 
     public static List<MorningTaskDef> GetRawMorningTasks(int day) => Plans[Clamp(day)].morningTasks;
 

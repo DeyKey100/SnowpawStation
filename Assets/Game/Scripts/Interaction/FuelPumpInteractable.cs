@@ -95,6 +95,15 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
             return;
         }
 
+        if (AdminPanel.IsOpen)
+        {
+            fueling = false;
+            armed = false;
+            HideHose();
+            ReleaseLocks();
+            return;
+        }
+
         UpdateHose();
 
         bool hold;

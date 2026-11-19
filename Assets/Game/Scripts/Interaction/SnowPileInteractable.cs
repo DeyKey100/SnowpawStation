@@ -27,13 +27,29 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
     private bool cleared;
     private int clearedDay = -1;
     private int observedDay = -1;
+    private bool initialized;
+    private bool managedSpawn;
+    private DayLoopManager spawnManager;
+    private string assignedTaskId;
+    private System.Action onCleared;
+    private Vector3 animationStartLocalPosition;
+    private Vector3 animationStartLocalScale;
+
+    private DayLoopManager CurrentManager => managedSpawn ? spawnManager : dayLoopManager;
 
     private void Awake()
     {
         EnsureMoundMesh();
-        visualTransform = snowRenderer != null ? snowRenderer.transform : transform;
-        initialLocalPosition = visualTransform.localPosition;
-        initialLocalScale = visualTransform.localScale;
+        if (!Application.IsPlaying(gameObject))
+        {
+            return;
+        }
+
+        EnsureInitialized();
+        if (managedSpawn)
+        {
+            return;
+        }
 
         if (dayLoopManager == null)
         {
@@ -42,6 +58,75 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
         if (dayLoopManager != null)
         {
             observedDay = dayLoopManager.CurrentDay;
+        }
+    }
+
+    private void EnsureInitialized()
+    {
+        if (initialized)
+        {
+            return;
+        }
+
+        EnsureMoundMesh();
+        if (snowRenderer == null)
+        {
+            TryGetComponent(out snowRenderer);
+        }
+        if (snowCollider == null)
+        {
+            TryGetComponent(out snowCollider);
+        }
+
+        visualTransform = snowRenderer != null ? snowRenderer.transform : transform;
+        initialLocalPosition = visualTransform.localPosition;
+        initialLocalScale = visualTransform.localScale;
+        initialized = true;
+    }
+
+    /// <summary>Configure an inactive pooled pile BEFORE moving it to its spawn point.</summary>
+    public void ConfigureSpawn(DayLoopManager manager, string assignedTaskId, System.Action onCleared)
+    {
+        if (!Application.IsPlaying(gameObject))
+        {
+            return;
+        }
+
+        managedSpawn = true;
+        spawnManager = manager;
+        this.assignedTaskId = assignedTaskId;
+        this.onCleared = onCleared;
+        PrepareForSpawn();
+    }
+
+    /// <summary>Reset to the cached template pose BEFORE positioning/activating a pooled pile.</summary>
+    public void PrepareForSpawn()
+    {
+        if (!Application.IsPlaying(gameObject))
+        {
+            return;
+        }
+
+        EnsureInitialized();
+        if (clearingRoutine != null)
+        {
+            StopCoroutine(clearingRoutine);
+            clearingRoutine = null;
+        }
+
+        cleared = false;
+        clearedDay = -1;
+        observedDay = CurrentManager != null ? CurrentManager.CurrentDay : -1;
+        visualTransform.localPosition = initialLocalPosition;
+        visualTransform.localScale = initialLocalScale;
+
+        if (snowRenderer != null)
+        {
+            snowRenderer.enabled = true;
+        }
+        if (snowCollider != null)
+        {
+            snowCollider.enabled = true;
         }
     }
 
@@ -181,6 +266,11 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
 
     private void Update()
     {
+        if (!Application.IsPlaying(gameObject) || managedSpawn)
+        {
+            return;
+        }
+
         if (dayLoopManager == null)
         {
             dayLoopManager = DayLoopManager.Instance;
@@ -195,6 +285,11 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
 
     public string GetInteractPrompt()
     {
+        if (!Application.IsPlaying(gameObject) || !isActiveAndEnabled)
+        {
+            return string.Empty;
+        }
+
         RefreshForNewDay();
 
         if (cleared)
@@ -218,24 +313,32 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
             return string.Empty;
         }
 
-        return "[E] Расчистить сугроб";
+        return managedSpawn && string.IsNullOrEmpty(assignedTaskId)
+            ? "[E] Расчистить сугроб (дополнительный)"
+            : "[E] Расчистить сугроб";
     }
 
     /// <summary>Записка — первая задача утра: пока её не прочли, сугробы не считаются.</summary>
     private bool IsUnlocked()
     {
-        if (dayLoopManager == null)
+        DayLoopManager manager = CurrentManager;
+        if (manager == null)
         {
             return true;
         }
 
         string id = ResolveTaskId();
         // Сугроба нет в плане дня (лишний сугроб) — записка ему не указ.
-        return string.IsNullOrEmpty(id) || dayLoopManager.IsMorningTaskUnlocked(id);
+        return string.IsNullOrEmpty(id) || manager.IsMorningTaskUnlocked(id);
     }
 
     public void Interact()
     {
+        if (!Application.IsPlaying(gameObject) || !isActiveAndEnabled)
+        {
+            return;
+        }
+
         RefreshForNewDay();
 
         if (cleared || clearingRoutine != null)
@@ -243,7 +346,7 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
             return;
         }
 
-        if (dayLoopManager == null)
+        if (CurrentManager == null)
         {
             Debug.LogError("SnowPileInteractable не назначил DayLoopManager.", this);
             return;
@@ -266,19 +369,24 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
 
     private bool CanClearDuringCurrentPhase()
     {
-        if (dayLoopManager == null)
+        DayLoopManager manager = CurrentManager;
+        if (manager == null)
         {
             return false;
         }
 
-        return dayLoopManager.CurrentState == DayLoopManager.DayState.Morning ||
-               dayLoopManager.MorningTaskCompleted;
+        return manager.CurrentState == DayLoopManager.DayState.Morning ||
+               manager.MorningTaskCompleted;
     }
 
     private IEnumerator ClearSnowRoutine()
     {
-        Vector3 startPosition = initialLocalPosition;
-        Vector3 startScale = initialLocalScale;
+        EnsureInitialized();
+        // The root may have moved since PrepareForSpawn; animate from its spawn pose.
+        Vector3 startPosition = visualTransform.localPosition;
+        Vector3 startScale = visualTransform.localScale;
+        animationStartLocalPosition = startPosition;
+        animationStartLocalScale = startScale;
         Vector3 endPosition = startPosition + Vector3.down * sinkDistance;
         Vector3 endScale = new Vector3(startScale.x, 0.01f, startScale.z);
 
@@ -287,11 +395,12 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
             snowCollider.enabled = false;
         }
 
+        float duration = Mathf.Max(0.1f, clearingDuration);
         float elapsed = 0f;
-        while (elapsed < clearingDuration)
+        while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
-            float normalizedTime = Mathf.Clamp01(elapsed / clearingDuration);
+            float normalizedTime = Mathf.Clamp01(elapsed / duration);
             float easedTime = clearingEase != null
                 ? clearingEase.Evaluate(normalizedTime)
                 : Mathf.SmoothStep(0f, 1f, normalizedTime);
@@ -309,19 +418,67 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
 
         visualTransform.localPosition = endPosition;
         visualTransform.localScale = endScale;
+        FinishClearing();
+    }
+
+    internal bool TryClearImmediately()
+    {
+        if (!Application.IsPlaying(gameObject) || !isActiveAndEnabled)
+        {
+            return false;
+        }
+
+        RefreshForNewDay();
+        if (cleared || !CanClearDuringCurrentPhase() || !IsUnlocked())
+        {
+            return false;
+        }
+
+        if (clearingRoutine != null)
+        {
+            StopCoroutine(clearingRoutine);
+        }
+
+        FinishClearing();
+        return true;
+    }
+
+    private void FinishClearing()
+    {
         cleared = true;
-        clearedDay = dayLoopManager != null ? dayLoopManager.CurrentDay : -1;
+        DayLoopManager manager = CurrentManager;
+        int completedDay = manager != null ? manager.CurrentDay : -1;
+        string completedTaskId = ResolveTaskId();
+        clearedDay = completedDay;
         clearingRoutine = null;
 
+        if (snowCollider != null)
+        {
+            snowCollider.enabled = false;
+        }
         if (snowRenderer != null)
         {
             snowRenderer.enabled = false;
         }
 
-        if (dayLoopManager != null && dayLoopManager.CurrentState == DayLoopManager.DayState.Morning)
+        // Snapshot before the callback: returning to the pool may reconfigure this pile.
+        System.Action callback = onCleared;
+        onCleared = null;
+        try
+        {
+            callback?.Invoke();
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogException(exception, this);
+        }
+
+        if (manager != null && manager.CurrentDay == completedDay &&
+            manager.CurrentState == DayLoopManager.DayState.Morning &&
+            !string.IsNullOrEmpty(completedTaskId))
         {
             Debug.Log("[Snowpaw Station] Сугроб расчищен.", this);
-            dayLoopManager.NotifyMorningTaskDone(ResolveTaskId());
+            manager.NotifyMorningTaskDone(completedTaskId);
         }
         else
         {
@@ -335,6 +492,17 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
     /// </summary>
     private string ResolveTaskId()
     {
+        if (managedSpawn)
+        {
+            // null/empty explicitly means optional; never fall back to another snow task.
+            return assignedTaskId;
+        }
+
+        if (dayLoopManager == null)
+        {
+            return null;
+        }
+
         var tasks = dayLoopManager.GetCurrentMorningTasks();
         if (!string.IsNullOrEmpty(taskId))
         {
@@ -360,7 +528,7 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
 
     private void RefreshForNewDay()
     {
-        if (dayLoopManager == null || clearedDay < 0 ||
+        if (managedSpawn || dayLoopManager == null || clearedDay < 0 ||
             dayLoopManager.CurrentDay == clearedDay)
         {
             return;
@@ -372,40 +540,31 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
 
     private void ResetForNewDay()
     {
-        if (clearingRoutine != null)
-        {
-            StopCoroutine(clearingRoutine);
-            clearingRoutine = null;
-        }
-
-        cleared = false;
-        clearedDay = -1;
-        visualTransform.localPosition = initialLocalPosition;
-        visualTransform.localScale = initialLocalScale;
-
-        if (snowRenderer != null)
-        {
-            snowRenderer.enabled = true;
-        }
-
-        if (snowCollider != null)
-        {
-            snowCollider.enabled = true;
-        }
+        PrepareForSpawn();
     }
 
     private void OnDisable()
     {
-        if (clearingRoutine != null)
+        if (clearingRoutine == null)
         {
-            StopCoroutine(clearingRoutine);
-            clearingRoutine = null;
+            return;
         }
 
+        StopCoroutine(clearingRoutine);
+        clearingRoutine = null;
         if (visualTransform != null)
         {
-            visualTransform.localPosition = initialLocalPosition;
-            visualTransform.localScale = initialLocalScale;
+            visualTransform.localPosition = animationStartLocalPosition;
+            visualTransform.localScale = animationStartLocalScale;
         }
+        if (snowRenderer != null)
+        {
+            snowRenderer.enabled = true;
+        }
+        if (snowCollider != null)
+        {
+            snowCollider.enabled = true;
+        }
+        // Interrupted clearing is not completion: no callback or task progress.
     }
 }
