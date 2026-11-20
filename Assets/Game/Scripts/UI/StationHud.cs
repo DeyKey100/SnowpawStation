@@ -336,6 +336,43 @@ public sealed class StationHud : MonoBehaviour
                 storyMarks.Add(MarkNone);
             }
         }
+        else if (dayLoopManager.CurrentState == DayLoopManager.DayState.Evening)
+        {
+            storyTitle = "18:00 · Вечер";
+            KotovVisit kotov = StoryDirector.Instance != null ? StoryDirector.Instance.Kotov : null;
+            if (kotov != null && kotov.IsLetterWaiting)
+            {
+                storyRows.Add("Подобрать открытку у порога");
+                storyMarks.Add(MarkTodo);
+            }
+            else
+            {
+                storyRows.Add("Визит Котова");
+                storyMarks.Add(MarkTodo);
+            }
+        }
+        else if (dayLoopManager.CurrentState == DayLoopManager.DayState.NightTransition)
+        {
+            storyTitle = "Ночь";
+            var nightTasks = DayPlans.GetNightTasks(dayLoopManager.CurrentDay);
+            bool allDone = true;
+            for (int i = 0; i < nightTasks.Count; i++)
+            {
+                bool done = dayLoopManager.GetTaskProgress(nightTasks[i].id) >= nightTasks[i].target;
+                if (!done)
+                {
+                    allDone = false;
+                    storyRows.Add(nightTasks[i].label);
+                    storyMarks.Add(MarkTodo);
+                }
+            }
+
+            if (allDone)
+            {
+                storyRows.Add("Лечь спать (кровать в доме)");
+                storyMarks.Add(MarkTodo);
+            }
+        }
     }
 
     private static string GetPhaseLabel(DayLoopManager.DayState state)
