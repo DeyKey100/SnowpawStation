@@ -216,7 +216,10 @@ public class SceneDoorTrigger : MonoBehaviour
         }
 
         Vector3 worldPoint = transform.position + Vector3.up * plateWorldOffsetY;
-        Vector3 screenPoint = viewCamera.WorldToScreenPoint(worldPoint);
+        // Камера может рендерить в маленький буфер PS1-эффекта, а IMGUI живёт
+        // в координатах полного экрана — пересчитываем через viewport.
+        Vector3 screenPoint = PsxLowResolution.WorldToScreenPoint(viewCamera, worldPoint);
+        Rect frame = PsxLowResolution.ScreenRect;
         if (screenPoint.z <= 0.1f)
         {
             // Табличка за камерой — рисовать нечего.
@@ -225,14 +228,14 @@ public class SceneDoorTrigger : MonoBehaviour
 
         // Табличка привязана к точке двери, поэтому при взгляде в сторону уезжает за край экрана.
         const float offscreenMargin = 80f;
-        if (screenPoint.x < -offscreenMargin || screenPoint.x > Screen.width + offscreenMargin ||
-            screenPoint.y < -offscreenMargin || screenPoint.y > Screen.height + offscreenMargin)
+        if (screenPoint.x < frame.xMin - offscreenMargin || screenPoint.x > frame.xMax + offscreenMargin ||
+            screenPoint.y < -offscreenMargin || screenPoint.y > frame.height + offscreenMargin)
         {
             return;
         }
 
         float x = screenPoint.x;
-        float y = Screen.height - screenPoint.y;
+        float y = frame.yMax - screenPoint.y;
 
         GUIStyle boxStyle = new GUIStyle(GUI.skin.box)
         {
@@ -251,7 +254,7 @@ public class SceneDoorTrigger : MonoBehaviour
         };
 
         Vector2 textSize = textStyle.CalcSize(new GUIContent(promptText));
-        float width = Mathf.Clamp(textSize.x + 30f, 170f, Screen.width - 32f);
+        float width = Mathf.Clamp(textSize.x + 30f, 170f, frame.width - 32f);
         const float height = 44f;
 
         Rect rect = new Rect(x - width * 0.5f, y - height, width, height);
