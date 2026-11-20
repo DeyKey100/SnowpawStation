@@ -8,6 +8,9 @@ using UnityEngine.InputSystem;
 /// Взаимодействие по расстоянию вместо луча из камеры: на каждом интерактивном
 /// объекте стоит ProximityInteractable, а здесь выбирается ближайший подошедший.
 /// Плашка и нажатие [E] общие на всех — рядом стоящие объекты не спорят за клавишу.
+///
+/// E забираем через InputPriority: диалог выше по порядку (−200) и успевает первым,
+/// поэтому нажатие, которым закрывают реплику, не срабатывает ещё и как «взять предмет».
 /// </summary>
 public class PlayerInteraction : MonoBehaviour
 {
@@ -118,7 +121,7 @@ public class PlayerInteraction : MonoBehaviour
         Focused = focused;
         HasFocusedInteractable = true;
 
-        if (!InteractPressed())
+        if (!InteractPressed() || !InputPriority.TryConsume())
         {
             return;
         }

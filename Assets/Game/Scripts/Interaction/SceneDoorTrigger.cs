@@ -7,7 +7,13 @@ using UnityEngine.InputSystem;
 /// Проход у двери: игрок приближается — над дверью появляется табличка,
 /// по нажатию E грузится целевая сцена (через чёрный экран загрузки).
 /// Работает по расстоянию, без луча-прицела, поэтому не конфликтует с PlayerInteraction.
+///
+/// E — клавиша общая с диалогом и предметами, поэтому порядок явный:
+/// диалог (−200) → предметы (0) → дверь (100). Дверь замыкает очередь и последней
+/// может забрать нажатие, а если его уже разобрали выше, молчит: без этого E,
+/// которым закрывали реплику, в том же кадре уводило в другую сцену.
 /// </summary>
+[DefaultExecutionOrder(100)]
 public class SceneDoorTrigger : MonoBehaviour
 {
     /// <summary>Все двери в сцене: PlayerInteraction уступает им [E], если дверь ближе.</summary>
@@ -135,6 +141,21 @@ public class SceneDoorTrigger : MonoBehaviour
             return;
         }
 
+        // Диалог важнее двери: пока окно открыто, E листает реплики и не уводит в сцену.
+        // Проверяем сам факт диалога, а не только InteractionLock: замок снимается
+        // отложенно, и в кадре закрытия окна дверь успевала сработать.
+        if (DialogueManager.IsActive)
+        {
+            return;
+        }
+
+        // Нажатие уже разобрали: диалог (он выше по порядку) или предмет под ногами.
+        // Без этой проверки E, которым закрывали реплику, в том же кадре уводило в дверь.
+        if (InputPriority.IsConsumed)
+        {
+            return;
+        }
+
         // У порога может лежать открытка/записка: если предмет ближе, чем дверь,
         // [E] отдаём ему. Если ближе дверь — открываемся (иначе плашка предмета
         // «съедала» нажатие и дверь не работала вовсе).
@@ -154,6 +175,11 @@ public class SceneDoorTrigger : MonoBehaviour
 
         // Открытка ещё не подобрана — дверь не открывается.
         if (LetterWaitingOnDoorstep)
+        {
+            return;
+        }
+
+        if (!InputPriority.TryConsume())
         {
             return;
         }
@@ -199,6 +225,12 @@ public class SceneDoorTrigger : MonoBehaviour
     private void OnGUI()
     {
         if (!playerInRange || viewCamera == null || plateBackground == null || SceneLoadingScreen.IsLoading)
+        {
+            return;
+        }
+
+        // Пока идёт диалог, табличка двери не висит: игрок читает реплики, а не выбирает сцену.
+        if (DialogueManager.IsActive)
         {
             return;
         }
