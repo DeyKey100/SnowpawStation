@@ -17,6 +17,16 @@ public class MorningTaskDef
     public bool gate;
 }
 
+/// <summary>Ночная задача дня нулевой версии.</summary>
+[Serializable]
+public class NightTaskDef
+{
+    public string id;
+    public string label;
+    public int target = 1;
+    public bool required = true;
+}
+
 /// <summary>Сюжетный гость дня: заказ и расписание появления.</summary>
 [Serializable]
 public class GuestDef
@@ -71,6 +81,18 @@ public static class DayPlans
         new MorningTaskDef { id = "keep_warm", label = "Держать тепло в метель (необязательно)", required = false },
     };
 
+    private static readonly List<NightTaskDef> Day1NightTasks = new List<NightTaskDef>
+    {
+        new NightTaskDef { id = "radio", label = "Послушать радио" },
+    };
+
+    private static readonly List<NightTaskDef> Day2NightTasks = new List<NightTaskDef>
+    {
+        new NightTaskDef { id = "radio", label = "Послушать радио" },
+    };
+
+    private static readonly List<NightTaskDef> Day3NightTasks = new List<NightTaskDef>();
+
     private static readonly Dictionary<int, DayPlanDef> Plans = new Dictionary<int, DayPlanDef>
     {
         {
@@ -79,6 +101,7 @@ public static class DayPlans
                 day = 1,
                 quota = 2,
                 morningTasks = Day1Tasks,
+                nightTasks = Day1NightTasks,
                 regularCars = new List<RegularCarDef>
                 {
                     new RegularCarDef { displayName = "Легковушка", liters = 35f },
@@ -96,6 +119,7 @@ public static class DayPlans
                 day = 2,
                 quota = 2,
                 morningTasks = Day2Tasks,
+                nightTasks = Day2NightTasks,
                 regularCars = new List<RegularCarDef>
                 {
                     new RegularCarDef { displayName = "Каблучок", liters = 45f },
@@ -113,6 +137,7 @@ public static class DayPlans
                 day = 3,
                 quota = 2,
                 morningTasks = Day3Tasks,
+                nightTasks = Day3NightTasks,
                 regularCars = new List<RegularCarDef>
                 {
                     new RegularCarDef { displayName = "Фургон", liters = 30f },
@@ -168,6 +193,26 @@ public static class DayPlans
         return result;
     }
 
+    public static List<NightTaskDef> GetRawNightTasks(int day) => Plans[Clamp(day)].nightTasks;
+
+    public static List<DayPlan.NightTask> GetNightTasks(int day)
+    {
+        List<NightTaskDef> raw = GetRawNightTasks(day);
+        List<DayPlan.NightTask> result = new List<DayPlan.NightTask>(raw.Count);
+        for (int i = 0; i < raw.Count; i++)
+        {
+            result.Add(new DayPlan.NightTask
+            {
+                id = raw[i].id,
+                label = raw[i].label,
+                target = raw[i].target,
+                required = raw[i].required,
+            });
+        }
+
+        return result;
+    }
+
     public static List<string> GetGuestSchedule(int day) => Plans[Clamp(day)].guestIds;
 
     public static List<GuestDef> GetGuests(int day) => Plans[Clamp(day)].guests;
@@ -209,6 +254,7 @@ public static class DayPlans
         public int day;
         public int quota = 2;
         public List<MorningTaskDef> morningTasks = new List<MorningTaskDef>();
+        public List<NightTaskDef> nightTasks = new List<NightTaskDef>();
         public List<RegularCarDef> regularCars = new List<RegularCarDef>();
         public List<GuestDef> guests = new List<GuestDef>();
 
@@ -241,5 +287,14 @@ public static class DayPlan
 
         /// <summary>Задача-ключ: без неё остальные утренние дела закрыты.</summary>
         public bool gate;
+    }
+
+    [Serializable]
+    public class NightTask
+    {
+        public string id;
+        public string label;
+        public int target = 1;
+        public bool required = true;
     }
 }

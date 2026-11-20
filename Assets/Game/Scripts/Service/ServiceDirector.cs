@@ -85,7 +85,6 @@ public sealed class ServiceDirector : MonoBehaviour
         SceneManager.sceneLoaded += OnSceneLoaded;
         truckArrival = gameObject.AddComponent<TruckArrivalController>();
         EnsurePumps(SceneManager.GetActiveScene());
-        EnsureShop(SceneManager.GetActiveScene());
     }
 
     private void OnDestroy()
@@ -110,7 +109,6 @@ public sealed class ServiceDirector : MonoBehaviour
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         EnsurePumps(scene);
-        EnsureShop(scene);
 
         if (CurrentOrder == null || truckArrival == null)
         {
