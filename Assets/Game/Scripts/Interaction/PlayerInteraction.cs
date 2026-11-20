@@ -8,6 +8,9 @@ using UnityEngine.InputSystem;
 /// Взаимодействие по расстоянию вместо луча из камеры: на каждом интерактивном
 /// объекте стоит ProximityInteractable, а здесь выбирается ближайший подошедший.
 /// Плашка и нажатие [E] общие на всех — рядом стоящие объекты не спорят за клавишу.
+///
+/// E забираем через InputPriority: диалог выше по порядку (−200) и успевает первым,
+/// поэтому нажатие, которым закрывают реплику, не срабатывает ещё и как «взять предмет».
 /// </summary>
 public class PlayerInteraction : MonoBehaviour
 {
@@ -118,7 +121,7 @@ public class PlayerInteraction : MonoBehaviour
         Focused = focused;
         HasFocusedInteractable = true;
 
-        if (!InteractPressed())
+        if (!InteractPressed() || !InputPriority.TryConsume())
         {
             return;
         }
@@ -225,7 +228,10 @@ public class PlayerInteraction : MonoBehaviour
             return;
         }
 
-        Vector3 screenPoint = viewCamera.WorldToScreenPoint(focused.CenterWorldPoint);
+        // Камера может рендерить в маленький буфер PS1-эффекта, а IMGUI живёт
+        // в координатах полного экрана — пересчитываем через viewport.
+        Vector3 screenPoint = PsxLowResolution.WorldToScreenPoint(viewCamera, focused.CenterWorldPoint);
+        Rect frame = PsxLowResolution.ScreenRect;
         if (screenPoint.z <= 0.1f)
         {
             // Объект за камерой — рисовать нечего.
@@ -234,7 +240,7 @@ public class PlayerInteraction : MonoBehaviour
 
         // Отвернулись в сторону — плашки нет.
         const float sideMargin = 60f;
-        if (screenPoint.x < -sideMargin || screenPoint.x > Screen.width + sideMargin)
+        if (screenPoint.x < frame.xMin - sideMargin || screenPoint.x > frame.xMax + sideMargin)
         {
             return;
         }
@@ -245,7 +251,7 @@ public class PlayerInteraction : MonoBehaviour
         // «над объектом» на экране — разные вещи. Привязываемся к экранной проекции
         // центра объекта и поднимаем плашку на фиксированное число пикселей.
         const float plateLiftPixels = 46f;
-        float y = (Screen.height - screenPoint.y) - plateLiftPixels;
+        float y = (frame.yMax - screenPoint.y) - plateLiftPixels;
 
         GUIStyle boxStyle = new GUIStyle(GUI.skin.box)
         {
@@ -264,13 +270,13 @@ public class PlayerInteraction : MonoBehaviour
         };
 
         Vector2 textSize = textStyle.CalcSize(new GUIContent(prompt));
-        float width = Mathf.Clamp(textSize.x + 30f, 170f, Screen.width - 32f);
+        float width = Mathf.Clamp(textSize.x + 30f, 170f, frame.width - 32f);
         const float height = 44f;
 
-        // Поджимаем к границам экрана, чтобы плашка не исчезала у краёв кадра.
+        // Поджимаем к границам кадра, чтобы плашка не уезжала на чёрные поля.
         const float margin = 12f;
-        x = Mathf.Clamp(x, width * 0.5f + margin, Screen.width - width * 0.5f - margin);
-        y = Mathf.Clamp(y, height + margin, Screen.height - margin);
+        x = Mathf.Clamp(x, frame.xMin + width * 0.5f + margin, frame.xMax - width * 0.5f - margin);
+        y = Mathf.Clamp(y, height + margin, frame.height - margin);
 
         Rect rect = new Rect(x - width * 0.5f, y - height, width, height);
         GUI.Box(rect, GUIContent.none, boxStyle);

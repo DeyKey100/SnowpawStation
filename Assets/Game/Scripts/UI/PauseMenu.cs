@@ -1,5 +1,6 @@
 using StarterAssets;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -7,6 +8,8 @@ using UnityEngine.InputSystem;
 [DisallowMultipleComponent]
 public sealed class PauseMenu : MonoBehaviour
 {
+    private static PauseMenu persistent;
+
     [Header("References")]
     [SerializeField] private MusicPlayer musicPlayer;
     [Tooltip("Назначать не обязательно: BlizzardManager создаётся кодом при запуске игры, ссылка подтягивается автоматически (Instance / FindFirstObjectByType).")]
@@ -28,8 +31,56 @@ public sealed class PauseMenu : MonoBehaviour
     private GUIStyle labelStyle;
     private Texture2D panelTexture;
 
+    /// <summary>
+    /// Меню паузы живёт на StationHUD из уличной сцены, поэтому в интерьере,
+    /// запущенном напрямую, его не было вовсе. Поднимаем своё, если в сцене
+    /// такого компонента нет, и перевозим между сценами.
+    /// </summary>
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void Bootstrap()
+    {
+        Adopt();
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+    }
+
+    private static void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        Adopt();
+    }
+
+    private static void Adopt()
+    {
+        if (persistent != null)
+        {
+            return;
+        }
+
+        PauseMenu found = FindFirstObjectByType<PauseMenu>();
+        if (found == null)
+        {
+            GameObject go = new GameObject("PauseMenu");
+            found = go.AddComponent<PauseMenu>();
+        }
+
+        persistent = found;
+        if (found.transform.parent == null)
+        {
+            DontDestroyOnLoad(found.gameObject);
+        }
+    }
+
     private void Awake()
     {
+        // Дубль из загруженной сцены не нужен: меню уже переехало сюда.
+        if (persistent != null && persistent != this)
+        {
+            Destroy(this);
+            return;
+        }
+
+        persistent = this;
+
         if (musicPlayer == null)
         {
             musicPlayer = FindFirstObjectByType<MusicPlayer>();
@@ -40,6 +91,13 @@ public sealed class PauseMenu : MonoBehaviour
 
     private void Update()
     {
+        // Дубль из загруженной сцены не должен перехватывать Esc: иначе
+        // нажатие обрабатывают два меню, и пауза ставится снова сразу после снятия.
+        if (persistent != this)
+        {
+            return;
+        }
+
         if (AdminPanel.IsOpen || !IsEscapePressed())
         {
             return;
@@ -69,6 +127,11 @@ public sealed class PauseMenu : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (persistent == this)
+        {
+            persistent = null;
+        }
+
         if (panelTexture != null)
         {
             Destroy(panelTexture);
@@ -146,7 +209,7 @@ public sealed class PauseMenu : MonoBehaviour
 
     private void OnGUI()
     {
-        if (!IsPaused)
+        if (!IsPaused || persistent != this)
         {
             return;
         }

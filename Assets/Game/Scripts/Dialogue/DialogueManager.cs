@@ -11,7 +11,12 @@ using UnityEngine.InputSystem;
 /// На время диалога блокирует обычное взаимодействие (InteractionLock) — но не камеру:
 /// на Котова можно смотреть/отворачиваться во время визита.
 /// Внешний вид — через общую тему UiTheme.
+///
+/// Клавиша E у диалога в приоритете: Update выполняется раньше мира (Execution Order
+/// −200) и забирает нажатие через InputPriority, поэтому стоя у двери игрок листает
+/// реплики, а не уезжает в другую сцену.
 /// </summary>
+[DefaultExecutionOrder(-200)]
 [DisallowMultipleComponent]
 public sealed class DialogueManager : MonoBehaviour
 {
@@ -133,6 +138,7 @@ public sealed class DialogueManager : MonoBehaviour
         }
 
         bool confirm;
+        bool confirmE;
         int move = 0;
         int digit = -1;
 
@@ -143,7 +149,8 @@ public sealed class DialogueManager : MonoBehaviour
             return;
         }
 
-        confirm = keyboard.eKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame ||
+        confirmE = keyboard.eKey.wasPressedThisFrame;
+        confirm = confirmE || keyboard.spaceKey.wasPressedThisFrame ||
                   keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame;
         if (keyboard.upArrowKey.wasPressedThisFrame) move = -1;
         if (keyboard.downArrowKey.wasPressedThisFrame) move = 1;
@@ -152,7 +159,8 @@ public sealed class DialogueManager : MonoBehaviour
         if (keyboard.digit3Key.wasPressedThisFrame) digit = 2;
         if (keyboard.digit4Key.wasPressedThisFrame) digit = 3;
 #else
-        confirm = Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Space) ||
+        confirmE = Input.GetKeyDown(KeyCode.E);
+        confirm = confirmE || Input.GetKeyDown(KeyCode.Space) ||
                   Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
         if (Input.GetKeyDown(KeyCode.UpArrow)) move = -1;
         if (Input.GetKeyDown(KeyCode.DownArrow)) move = 1;
@@ -161,6 +169,13 @@ public sealed class DialogueManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Alpha3)) digit = 2;
         if (Input.GetKeyDown(KeyCode.Alpha4)) digit = 3;
 #endif
+
+        // E забираем себе отдельно от Space/Enter: на E висят ещё дверь и предметы,
+        // и именно её нельзя отдавать миру в кадр, когда диалог её же и обработал.
+        if (confirmE)
+        {
+            InputPriority.TryConsume();
+        }
 
         if (!entry.IsChoice)
         {

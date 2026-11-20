@@ -7,7 +7,13 @@ using UnityEngine.InputSystem;
 /// Проход у двери: игрок приближается — над дверью появляется табличка,
 /// по нажатию E грузится целевая сцена (через чёрный экран загрузки).
 /// Работает по расстоянию, без луча-прицела, поэтому не конфликтует с PlayerInteraction.
+///
+/// E — клавиша общая с диалогом и предметами, поэтому порядок явный:
+/// диалог (−200) → предметы (0) → дверь (100). Дверь замыкает очередь и последней
+/// может забрать нажатие, а если его уже разобрали выше, молчит: без этого E,
+/// которым закрывали реплику, в том же кадре уводило в другую сцену.
 /// </summary>
+[DefaultExecutionOrder(100)]
 public class SceneDoorTrigger : MonoBehaviour
 {
     /// <summary>Все двери в сцене: PlayerInteraction уступает им [E], если дверь ближе.</summary>
@@ -135,6 +141,21 @@ public class SceneDoorTrigger : MonoBehaviour
             return;
         }
 
+        // Диалог важнее двери: пока окно открыто, E листает реплики и не уводит в сцену.
+        // Проверяем сам факт диалога, а не только InteractionLock: замок снимается
+        // отложенно, и в кадре закрытия окна дверь успевала сработать.
+        if (DialogueManager.IsActive)
+        {
+            return;
+        }
+
+        // Нажатие уже разобрали: диалог (он выше по порядку) или предмет под ногами.
+        // Без этой проверки E, которым закрывали реплику, в том же кадре уводило в дверь.
+        if (InputPriority.IsConsumed)
+        {
+            return;
+        }
+
         // У порога может лежать открытка/записка: если предмет ближе, чем дверь,
         // [E] отдаём ему. Если ближе дверь — открываемся (иначе плашка предмета
         // «съедала» нажатие и дверь не работала вовсе).
@@ -154,6 +175,11 @@ public class SceneDoorTrigger : MonoBehaviour
 
         // Открытка ещё не подобрана — дверь не открывается.
         if (LetterWaitingOnDoorstep)
+        {
+            return;
+        }
+
+        if (!InputPriority.TryConsume())
         {
             return;
         }
@@ -203,6 +229,12 @@ public class SceneDoorTrigger : MonoBehaviour
             return;
         }
 
+        // Пока идёт диалог, табличка двери не висит: игрок читает реплики, а не выбирает сцену.
+        if (DialogueManager.IsActive)
+        {
+            return;
+        }
+
         // Пока на пороге лежит открытка Котова, дверь не предлагает войти:
         // сначала подбираем письмо, иначе [E] уводил в другую сцену.
         if (LetterWaitingOnDoorstep)
@@ -216,7 +248,10 @@ public class SceneDoorTrigger : MonoBehaviour
         }
 
         Vector3 worldPoint = transform.position + Vector3.up * plateWorldOffsetY;
-        Vector3 screenPoint = viewCamera.WorldToScreenPoint(worldPoint);
+        // Камера может рендерить в маленький буфер PS1-эффекта, а IMGUI живёт
+        // в координатах полного экрана — пересчитываем через viewport.
+        Vector3 screenPoint = PsxLowResolution.WorldToScreenPoint(viewCamera, worldPoint);
+        Rect frame = PsxLowResolution.ScreenRect;
         if (screenPoint.z <= 0.1f)
         {
             // Табличка за камерой — рисовать нечего.
@@ -225,14 +260,14 @@ public class SceneDoorTrigger : MonoBehaviour
 
         // Табличка привязана к точке двери, поэтому при взгляде в сторону уезжает за край экрана.
         const float offscreenMargin = 80f;
-        if (screenPoint.x < -offscreenMargin || screenPoint.x > Screen.width + offscreenMargin ||
-            screenPoint.y < -offscreenMargin || screenPoint.y > Screen.height + offscreenMargin)
+        if (screenPoint.x < frame.xMin - offscreenMargin || screenPoint.x > frame.xMax + offscreenMargin ||
+            screenPoint.y < -offscreenMargin || screenPoint.y > frame.height + offscreenMargin)
         {
             return;
         }
 
         float x = screenPoint.x;
-        float y = Screen.height - screenPoint.y;
+        float y = frame.yMax - screenPoint.y;
 
         GUIStyle boxStyle = new GUIStyle(GUI.skin.box)
         {
@@ -251,7 +286,7 @@ public class SceneDoorTrigger : MonoBehaviour
         };
 
         Vector2 textSize = textStyle.CalcSize(new GUIContent(promptText));
-        float width = Mathf.Clamp(textSize.x + 30f, 170f, Screen.width - 32f);
+        float width = Mathf.Clamp(textSize.x + 30f, 170f, frame.width - 32f);
         const float height = 44f;
 
         Rect rect = new Rect(x - width * 0.5f, y - height, width, height);

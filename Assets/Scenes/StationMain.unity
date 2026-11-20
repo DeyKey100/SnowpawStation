@@ -2618,7 +2618,7 @@ MonoBehaviour:
   plateWorldOffsetY: 1.2
   targetSceneName: GasStationInterior
   movePlayerToSpawn: 1
-  spawnPosition: {x: 0, y: 0.5, z: 2.5}
+  spawnPosition: {x: 0, y: 0.2, z: -8.4}
   spawnYaw: 180
   playerTag: Player
   activateDistance: 1.5
@@ -2632,8 +2632,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2002159138}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -5.5039997, y: 0, z: 1.561}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -10.048, y: 0.5, z: 1.561}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

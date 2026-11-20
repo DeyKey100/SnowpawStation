@@ -42,9 +42,11 @@ public sealed class AdminPanel : MonoBehaviour
         {
             Close();
         }
-        else if (DayLoopManager.Instance != null && !PauseMenu.IsPaused &&
-                 !SceneLoadingScreen.IsLoading && !PlayerControlLock.IsHeldBy("chopping"))
+        else if (!PauseMenu.IsPaused && !SceneLoadingScreen.IsLoading &&
+                 !PlayerControlLock.IsHeldBy("chopping"))
         {
+            // DayLoopManager живёт в уличной сцене и в интерьере, запущенном
+            // напрямую, его нет — панель всё равно должна открываться.
             Open();
         }
     }
@@ -120,13 +122,13 @@ public sealed class AdminPanel : MonoBehaviour
         Matrix4x4 previousMatrix = GUI.matrix;
         float scale = Mathf.Min(1f, Mathf.Min(Screen.width / 480f, Screen.height / 460f));
         GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - 440f * scale) * 0.5f,
-            (Screen.height - 424f * scale) * 0.5f, 0f), Quaternion.identity, new Vector3(scale, scale, 1f));
+            (Screen.height - 548f * scale) * 0.5f, 0f), Quaternion.identity, new Vector3(scale, scale, 1f));
 
         DayLoopManager loop = DayLoopManager.Instance;
         StationHeatSystem heat = StationHeatSystem.Active;
         StoryDirector story = StoryDirector.Instance;
 
-        UiTheme.Frame(new Rect(0f, 0f, 440f, 424f), UiTheme.Night, UiTheme.Frost);
+        UiTheme.Frame(new Rect(0f, 0f, 440f, 548f), UiTheme.Night, UiTheme.Frost);
         GUI.Label(new Rect(20f, 14f, 400f, 32f), "Админ-панель  [~]", titleStyle);
         if (loop != null)
         {
@@ -197,8 +199,39 @@ public sealed class AdminPanel : MonoBehaviour
             }
         }
 
-        GUI.Label(new Rect(20f, 322f, 400f, 44f), message, messageStyle);
-        if (Button(370f, "Закрыть"))
+        // PS1-разрешение: переключатель для дебага, чтобы сравнивать вид на ходу.
+        PsxLowResolution psx = PsxLowResolution.Instance;
+        if (psx != null)
+        {
+            string psxLabel = PsxLowResolution.IsActive
+                ? $"PS1-эффект: вкл ({psx.TargetHeight}p)  [F9]"
+                : "PS1-эффект: выкл  [F9]";
+            if (GUI.Button(new Rect(20f, 322f, 400f, 30f), psxLabel, buttonStyle))
+            {
+                psx.SetEnabled(!PsxLowResolution.IsActive);
+                message = PsxLowResolution.IsActive ? "Эффект включён." : "Эффект выключен.";
+            }
+
+            if (GUI.Button(new Rect(20f, 356f, 400f, 30f), "Сменить разрешение кадра", buttonStyle))
+            {
+                psx.SetTargetHeight(NextPsxHeight(psx.TargetHeight));
+                message = $"Кадр: {psx.TargetHeight} строк.";
+            }
+
+            string aspectLabel = psx.CurrentAspectMode == PsxLowResolution.AspectMode.Pillarbox
+                ? "Кадр: 4:3 с полями"
+                : "Кадр: во весь экран";
+            if (GUI.Button(new Rect(20f, 390f, 400f, 30f), aspectLabel, buttonStyle))
+            {
+                psx.SetAspectMode(psx.CurrentAspectMode == PsxLowResolution.AspectMode.Pillarbox
+                    ? PsxLowResolution.AspectMode.FollowScreen
+                    : PsxLowResolution.AspectMode.Pillarbox);
+                message = "Формат кадра изменён.";
+            }
+        }
+
+        GUI.Label(new Rect(20f, 428f, 400f, 44f), message, messageStyle);
+        if (Button(474f, "Закрыть"))
         {
             Close();
         }
@@ -214,6 +247,18 @@ public sealed class AdminPanel : MonoBehaviour
         bool pressed = GUI.Button(new Rect(20f, y, 400f, 34f), text, buttonStyle);
         GUI.enabled = previousEnabled;
         return pressed;
+    }
+
+    /// <summary>Следующая ступень разрешения кадра по кругу.</summary>
+    private static int NextPsxHeight(int current)
+    {
+        switch (current)
+        {
+            case 180: return 240;
+            case 240: return 320;
+            case 320: return 360;
+            default: return 180;
+        }
     }
 
     private void EnsureStyles()
