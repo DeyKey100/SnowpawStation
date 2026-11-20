@@ -104,10 +104,17 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
             return;
         }
 
-        // Записка лежит на столе (стойке с кассой) внутри дома: на улице её нет,
+        // Записка лежит на прилавке с кассой внутри дома: на улице её нет,
         // пока игрок не зайдёт внутрь. Стойка тоже интерактивна, поэтому записке выдан
         // приоритет: иначе подсказку кассы получал бы тот, кто ближе к стойке, а не к записке.
-        Vector3 pos = new Vector3(-0.62f, 1.09f, 0.05f); // на столе, чуть в стороне от кассы
+        // Точку берём у самой модели магазина: у неё прилавок стоит не там, где стоял
+        // куб старого интерьера, и жёсткая координата оставляла записку в воздухе.
+        const float noteLift = 0.03f / 2f;
+        if (!InteriorShopAnchors.TryGetCashDeskSurface(noteLift, out Vector3 pos))
+        {
+            Debug.LogWarning("[Snowpaw Station] Прилавок магазина не найден — записка не создана.");
+            return;
+        }
 
         note = GameObject.CreatePrimitive(PrimitiveType.Cube);
         note.name = "KeeperNote";
@@ -115,6 +122,14 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
         note.transform.localScale = new Vector3(0.34f, 0.03f, 0.46f);
         note.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
         ApplyInteractableLayer(note);
+
+        // Записка лежит на прилавке — чтобы не провалиться сквозь него, убираем у куба
+        // столкновения: маркеру хватает габаритов рендерера, а игроку мешать нечему.
+        Collider noteCollider = note.GetComponent<Collider>();
+        if (noteCollider != null)
+        {
+            Destroy(noteCollider);
+        }
 
         Renderer renderer = note.GetComponent<Renderer>();
         if (renderer != null)

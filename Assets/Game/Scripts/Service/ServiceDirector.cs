@@ -626,8 +626,18 @@ public sealed class ServiceDirector : MonoBehaviour
         return namedPump != null ? namedPump.transform : null;
     }
 
+    /// <summary>
+    /// Точка магазина: в интерьере это корень новой модели, на улице — старая
+    /// киосковая постройка (по имени «shop»/«kassa»).
+    /// </summary>
     private static GameObject FindStationAnchor()
     {
+        Transform interiorRoot = InteriorShopAnchors.FindRoot();
+        if (interiorRoot != null)
+        {
+            return interiorRoot.gameObject;
+        }
+
         List<GameObject> found = new List<GameObject>();
         for (int s = 0; s < SceneManager.sceneCount; s++)
         {
@@ -661,7 +671,12 @@ public sealed class ServiceDirector : MonoBehaviour
         }
     }
 
-    /// <summary>Магазин создаётся только в интерьерной сцене (полка + стойка с рычагом кассы).</summary>
+    /// <summary>
+    /// Магазин живёт только в интерьерной сцене. Полка и стойка — не рантайм-кубы,
+    /// а сама новая модель магазина (shop_interior_joined): интерактивные компоненты
+    /// вешаются на её меши, поэтому подсказки висят на настоящих стеллаже и прилавке,
+    /// а не на невидимых кубах, оставшихся от старого интерьера.
+    /// </summary>
     private void EnsureShop(Scene scene)
     {
         if (!scene.IsValid() || !scene.isLoaded || !scene.name.ToLowerInvariant().Contains("interior"))
@@ -678,31 +693,38 @@ public sealed class ServiceDirector : MonoBehaviour
             return;
         }
 
-        int layer = LayerMask.NameToLayer("Interactable");
-        if (layer < 0)
+        Renderer shelf = InteriorShopAnchors.FindMesh(InteriorShopAnchors.GoodsShelfMesh);
+        Renderer counter = InteriorShopAnchors.FindMesh(InteriorShopAnchors.CashDeskMesh);
+        if (shelf == null || counter == null)
         {
-            layer = 0;
+            Debug.LogWarning(
+                "[Snowpaw Station] Модель магазина не найдена: полка и стойка с кассой не подключены.");
+            return;
         }
 
-        GameObject shelf = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        shelf.name = "ShopShelf";
-        shelf.transform.position = new Vector3(3f, 1f, -3.5f);
-        shelf.transform.localScale = new Vector3(1.6f, 0.1f, 0.6f);
-        shelf.layer = layer;
-        shelf.AddComponent<ShopShelfInteractable>();
-        ProximityInteractable.EnsureOn(shelf, 2.2f);
+        AttachShopMarker(shelf.gameObject, shelf.gameObject.AddComponent<ShopShelfInteractable>());
+        AttachShopMarker(counter.gameObject, counter.gameObject.AddComponent<ShopCounterInteractable>());
 
-        GameObject counter = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        counter.name = "ShopCounter";
-        counter.transform.position = new Vector3(0f, 1f, 0f);
-        counter.transform.localScale = new Vector3(2.2f, 0.1f, 0.8f);
-        counter.layer = layer;
-        counter.AddComponent<ShopCounterInteractable>();
-        ProximityInteractable.EnsureOn(counter, 2.2f);
+        runtimeShop.Add(shelf.gameObject);
+        runtimeShop.Add(counter.gameObject);
+        Debug.Log("[Snowpaw Station] Магазин подключён к модели интерьера: полка + стойка с кассой.");
+    }
 
-        runtimeShop.Add(shelf);
-        runtimeShop.Add(counter);
-        Debug.Log("[Snowpaw Station] Магазин в интерьере создан в рантайме: полка + стойка.");
+    /// <summary>
+    /// Вешает маркер близости на меш модели. Слой не меняется: геометрия магазина
+    /// участвует в проверке земли и столкновениях, и перенос её в слой Interactable
+    /// выбил бы из них пол и стойки.
+    /// </summary>
+    private static void AttachShopMarker(GameObject target, IInteractable interactable)
+    {
+        if (interactable == null)
+        {
+            return;
+        }
+
+        // Меши модели импортированы статикой: без коллайдера габариты берутся из рендерера,
+        // поэтому маркеру этого достаточно.
+        ProximityInteractable.EnsureOn(target, 2.2f);
     }
 }
 
@@ -715,7 +737,9 @@ public sealed class ShopShelfInteractable : MonoBehaviour, IInteractable
         ServiceDirector service = ServiceDirector.Instance;
         if (service == null || service.CurrentOrder == null || string.IsNullOrEmpty(service.CurrentOrder.item))
         {
-            return "[E] Полка с товаром";
+            // Заказа с товаром нет — полка молчит, как и колонки без машины.
+            // Иначе подсказка висит на стеллаже всё утро и путает с задачами.
+            return "";
         }
 
         return !string.IsNullOrEmpty(service.CarriedGood)
@@ -748,9 +772,15 @@ public sealed class ShopCounterInteractable : MonoBehaviour, IInteractable
     public string GetInteractPrompt()
     {
         ServiceDirector service = ServiceDirector.Instance;
-        return service != null && !string.IsNullOrEmpty(service.CarriedGood)
-            ? $"[E] Подтвердить: {Goods.DisplayName(service.CarriedGood)} (касса)"
-            : "[E] Стойка с кассой";
+
+        // Стойка нужна только когда есть что подтверждать: без товара в лапах
+        // подсказка на кассе бессмысленна и просто висит на виду.
+        if (service == null || string.IsNullOrEmpty(service.CarriedGood))
+        {
+            return "";
+        }
+
+        return $"[E] Подтвердить: {Goods.DisplayName(service.CarriedGood)} (касса)";
     }
 
     public void Interact()
