@@ -225,7 +225,7 @@ public static class StoryDialogues
         s.Say("РАДИО", "«Слушай метель...»");
         s.Note("*Хвост Рыжикова дёргается, он подкручивает громкость. Показалось.*");
         s.Note("[Финальный кадр снаружи: тёплое окно станции, камера медленно уходит к сосне. Под сосной никого.]");
-        s.Choose(DialogueBuilder.Option("Спать", null, null, "night_sleep"));
+        s.Choose(DialogueBuilder.Option("Пора в постель", null, null, null));
         return s;
     }
 
@@ -236,7 +236,7 @@ public static class StoryDialogues
         s.Note("[Помехи, щелчок, шкала гаснет.] Рыжиков садится в кресле прямо. *Я его выключал. Точно выключал.*");
         s.Choose(
             DialogueBuilder.Option("Подкрутить ручку настройки", "[Голос ручка не убирает. Шкала гаснет сама.]", null, null),
-            DialogueBuilder.Option("Выключить радио", null, null, "night_sleep"));
+            DialogueBuilder.Option("Выключить радио", null, null, null));
         return s;
     }
 
@@ -265,7 +265,7 @@ public static class StoryDialogues
     {
         DialogueScript s = DialogueBuilder.Create("night3_end", "[Ночью ветер бьёт в окна, печь гудит. Рыжиков открывает блокнот. На завтрашнем, ещё пустом листе «Смены» уже есть строка карандашом, и её писал не он:]");
         s.Note(GameState.HasGlove ? "«Вернуть чужое»." : "«У сосны лежит чужое».");
-        s.Choose(DialogueBuilder.Option("Закрыть блокнот", null, null, "night_sleep"));
+        s.Choose(DialogueBuilder.Option("Закрыть блокнот", null, null, null));
         return s;
     }
 

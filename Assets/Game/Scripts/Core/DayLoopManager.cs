@@ -278,6 +278,40 @@ public class DayLoopManager : MonoBehaviour
 
     // --- ВЕЧЕР → НОЧЬ → СЛЕДУЮЩИЙ ДЕНЬ ---
 
+    /// <summary>Все обязательные ночные задачи дня выполнены (сон разрешён).</summary>
+    public bool NightTasksCompleted => IsNightDone(currentDay);
+
+    public bool IsNightDone(int day)
+    {
+        List<DayPlan.NightTask> tasks = DayPlans.GetNightTasks(day);
+        for (int i = 0; i < tasks.Count; i++)
+        {
+            if (!tasks[i].required)
+            {
+                continue;
+            }
+
+            if (GetTaskProgress(tasks[i].id) < tasks[i].target)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public void NotifyNightTaskDone(string taskId, int amount = 1)
+    {
+        if (CurrentState != DayState.NightTransition)
+        {
+            return;
+        }
+
+        int current = GetTaskProgress(taskId);
+        taskProgress[taskId] = current + Mathf.Max(1, amount);
+        Debug.Log($"[Snowpaw Station] Ночь дня {currentDay}: задача '{taskId}' выполнена ({taskProgress[taskId]}).");
+    }
+
     /// <summary>Вечернее событие (визит Котова и письмо) завершено → ночь.</summary>
     public void NotifyEveningCompleted()
     {
