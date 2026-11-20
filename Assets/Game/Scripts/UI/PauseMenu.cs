@@ -40,7 +40,7 @@ public sealed class PauseMenu : MonoBehaviour
 
     private void Update()
     {
-        if (!IsEscapePressed())
+        if (AdminPanel.IsOpen || !IsEscapePressed())
         {
             return;
         }

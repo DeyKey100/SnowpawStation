@@ -51,6 +51,7 @@ ExportedObj/
 *.pidb.meta
 *.pdb.meta
 *.mdb.meta
+*.obj.meta
 
 # Unity3D generated file on crash reports
 sysinfo.txt
@@ -502,3 +503,4 @@ README.md
 .claudeignore
 .mcp.json
 /.sharrowkin
+/.opencode

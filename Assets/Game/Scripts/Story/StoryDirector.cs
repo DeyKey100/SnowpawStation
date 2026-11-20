@@ -55,6 +55,9 @@ public sealed class StoryDirector : MonoBehaviour
         Service = gameObject.AddComponent<ServiceDirector>();
         gameObject.AddComponent<Day1WorldBootstrap>();
         gameObject.AddComponent<PlayerColdEffects>();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        gameObject.AddComponent<AdminPanel>();
+#endif
         RegisterDialogueActions();
     }
 

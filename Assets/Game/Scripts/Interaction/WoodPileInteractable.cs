@@ -76,13 +76,36 @@ public class WoodPileInteractable : MonoBehaviour, IInteractable
             return;
         }
 
-        minigame.Begin(() =>
+        minigame.Begin(() => AddChoppedLog(s));
+    }
+
+    internal bool TryChopImmediately()
+    {
+        FirewoodStorage target = Storage;
+        return target != null && target.CanAddFirewood && IsUnlocked() && AddChoppedLog(target);
+    }
+
+    private static bool AddChoppedLog(FirewoodStorage target)
+    {
+        if (target == null || !target.TryAddFirewood())
         {
-            if (s.TryAddFirewood())
+            return false;
+        }
+
+        DayLoopManager loop = DayLoopManager.Instance;
+        if (loop != null && loop.CurrentState == DayLoopManager.DayState.Morning)
+        {
+            var tasks = DayPlans.GetRawMorningTasks(loop.CurrentDay);
+            for (int i = 0; i < tasks.Count; i++)
             {
-                DayLoopManager.Instance?.NotifyMorningTaskDone("chop_logs");
-                Debug.Log("[Snowpaw Station] Полено нарублено (в лапах " + s.CurrentFirewood + "/3).");
+                if (tasks[i].id == "chop_logs")
+                {
+                    loop.NotifyMorningTaskDone("chop_logs");
+                    break;
+                }
             }
-        });
+        }
+
+        return true;
     }
 }
