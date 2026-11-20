@@ -544,9 +544,9 @@ MonoBehaviour:
   interiorLightIntensity: 5.5
   interiorLightRange: 11
   ensureCamera: 1
-  interiorCameraDistance: 3
+  interiorCameraDistance: 7
   interiorShoulderOffset: 0.7
-  interiorShoulderHeight: 1.7
+  interiorShoulderHeight: 0.7
 --- !u!1001 &649525424
 PrefabInstance:
   m_ObjectHideFlags: 0
