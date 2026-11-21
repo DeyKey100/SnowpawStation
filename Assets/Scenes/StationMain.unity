@@ -1684,7 +1684,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 960140299}
-  - {fileID: 1618151907}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1304948001 stripped
@@ -2403,60 +2402,6 @@ Camera:
   m_CorrespondingSourceObject: {fileID: 9005220659476430821, guid: 2d3a85ecde41a8246a79669975912b74, type: 3}
   m_PrefabInstance: {fileID: 1572513107}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &1618151906
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1618151907}
-  - component: {fileID: 1618151908}
-  m_Layer: 0
-  m_Name: Door_Enter
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1618151907
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1618151906}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1287468317}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1618151908
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1618151906}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5c24a3840e2aaf4abc093a3106b952f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  promptText: "[E] \u0412\u043E\u0439\u0442\u0438"
-  plateWorldOffsetY: 1.2
-  targetSceneName: HouseInterior
-  movePlayerToSpawn: 1
-  spawnPosition: {x: 0, y: 0.5, z: 2.5}
-  spawnYaw: 180
-  playerTag: Player
-  activateDistance: 1.5
-  maxVerticalDifference: 3
-  inputLockDuration: 0.35
 --- !u!1 &1840097447
 GameObject:
   m_ObjectHideFlags: 0
@@ -2633,7 +2578,7 @@ Transform:
   m_GameObject: {fileID: 2002159138}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -10.048, y: 0.5, z: 1.561}
+  m_LocalPosition: {x: -5.15, y: 0.115, z: 1.561}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

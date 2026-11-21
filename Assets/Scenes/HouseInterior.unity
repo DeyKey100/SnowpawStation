@@ -539,9 +539,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4cb5ce208e9744b88f8aba6cee2567aa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  sleepPrompt: "[E] \u041B\u0435\u0447\u044C \u0441\u043F\u0430\u0442\u044C"
-  dayPrompt: "\u0421\u043F\u0430\u0442\u044C \u043C\u043E\u0436\u043D\u043E \u0442\u043E\u043B\u044C\u043A\u043E
-    \u043D\u043E\u0447\u044C\u044E"
+  prompt: "[E] \u041B\u0435\u0447\u044C \u0441\u043F\u0430\u0442\u044C"
+  speakerName: "\u0420\u042B\u0416\u0418\u041A\u041E\u0412"
+  earlyDialogueText: "\u0415\u0449\u0451 \u0440\u0430\u043D\u043E \u0441\u043F\u0430\u0442\u044C.
+    \u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u043D\u0443\u0436\u043D\u043E \u0437\u0430\u043A\u043E\u043D\u0447\u0438\u0442\u044C
+    \u0434\u0435\u043B\u0430."
   fadeDuration: 0.5
   sleepDuration: 0.8
 --- !u!1001 &1179374225
@@ -746,12 +748,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5c24a3840e2aaf4abc093a3106b952f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  promptText: "E - \u0432\u044B\u0439\u0442\u0438"
+  promptText: "E - \u0432\u044B\u0439\u0442\u0438 \u0432 \u043C\u0430\u0433\u0430\u0437\u0438\u043D"
   plateWorldOffsetY: 1.45
-  targetSceneName: StationMain
+  targetSceneName: GasStationInterior
   movePlayerToSpawn: 1
-  spawnPosition: {x: -9.5, y: 0.5, z: 1.5}
-  spawnYaw: 90
+  spawnPosition: {x: 6.6, y: 0.25, z: -13.2}
+  spawnYaw: 0
   playerTag: Player
   activateDistance: 1.7
   maxVerticalDifference: 3

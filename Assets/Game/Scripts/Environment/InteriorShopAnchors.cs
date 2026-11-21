@@ -28,6 +28,9 @@ public static class InteriorShopAnchors
     /// <summary>Длинная стойка в центре зала.</summary>
     public const string LongCounterMesh = "Mesh_108";
 
+    /// <summary>Стойка у входа, на неё ставим стакан кофе для Дяди Котлеты.</summary>
+    public const string CoffeeCounterMesh = "Mesh_124";
+
     /// <summary>Очаг/печь: языки пламени в модели.</summary>
     public const string StoveFlameMesh = "Stove_Flame_Center";
 
@@ -147,6 +150,24 @@ public static class InteriorShopAnchors
 
         // Передняя стойка стоит поперёк зала: покупатель подходит с юга (максимум Z).
         point = new Vector3(desk.center.x, desk.center.y, desk.max.z + 0.35f);
+        return true;
+    }
+
+    /// <summary>Верхняя плоскость стойки Mesh_124 — сюда ставим стакан кофе.</summary>
+    public static bool TryGetCoffeeCupPoint(out Vector3 point)
+    {
+        point = Vector3.zero;
+        if (!TryGetBounds(CoffeeCounterMesh, out Bounds counter))
+        {
+            return false;
+        }
+
+        // Стойка стоит поперёк зала у входа: стакан ставим ближе к покупателю (макс. Z)
+        // и чуть вбок, чтобы он не оказался под рукой кассира.
+        point = new Vector3(
+            counter.center.x + counter.extents.x * 0.45f,
+            counter.max.y,
+            counter.center.z);
         return true;
     }
 
