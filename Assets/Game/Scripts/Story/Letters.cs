@@ -115,16 +115,19 @@ public static class Goods
         public string id;
         public string displayName;
         public bool needsKettle; // кофе/грелка: напиток горячий при тепле от 25%
+
+        /// <summary>Винительный падеж для плашки «Взять …»: «Взять канистру», а не «Взять канистра».</summary>
+        public string pickupName;
     }
 
     public static readonly List<GoodDef> All = new List<GoodDef>
     {
-        new GoodDef { id = "coffee", displayName = "Кофе", needsKettle = true },
-        new GoodDef { id = "tea", displayName = "Чай", needsKettle = true },
-        new GoodDef { id = "cookies", displayName = "Печенье" },
-        new GoodDef { id = "cigarettes", displayName = "Сигареты" },
-        new GoodDef { id = "canister", displayName = "Канистра", needsKettle = false },
-        new GoodDef { id = "heater", displayName = "Грелка", needsKettle = true },
+        new GoodDef { id = "coffee", displayName = "Кофе", pickupName = "кофе", needsKettle = true },
+        new GoodDef { id = "tea", displayName = "Чай", pickupName = "чай", needsKettle = true },
+        new GoodDef { id = "cookies", displayName = "Печенье", pickupName = "печенье" },
+        new GoodDef { id = "cigarettes", displayName = "Сигареты", pickupName = "сигареты" },
+        new GoodDef { id = "canister", displayName = "Канистра", pickupName = "канистру", needsKettle = false },
+        new GoodDef { id = "heater", displayName = "Грелка", pickupName = "грелку", needsKettle = true },
     };
 
     public static GoodDef Find(string id)
@@ -144,5 +147,17 @@ public static class Goods
     {
         GoodDef def = Find(id);
         return def != null ? def.displayName : id;
+    }
+
+    /// <summary>Название в винительном падеже — для «[E] Взять …».</summary>
+    public static string PickupName(string id)
+    {
+        GoodDef def = Find(id);
+        if (def == null)
+        {
+            return id;
+        }
+
+        return string.IsNullOrEmpty(def.pickupName) ? def.displayName : def.pickupName;
     }
 }
