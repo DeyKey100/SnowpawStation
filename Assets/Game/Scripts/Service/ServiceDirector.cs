@@ -140,9 +140,13 @@ public sealed class ServiceDirector : MonoBehaviour
         if (CurrentStage == OrderStage.Refueling || CurrentStage == OrderStage.AwaitingItem)
         {
             Transform pump = FindPump(CurrentOrder.pumpIndex);
-            if (pump != null)
+            if (pump != null && truckArrival.SpawnParked(pump))
             {
-                truckArrival.SpawnParked(pump);
+                // Вернулись из магазина — приветствие снова ждёт подхода игрока.
+                if (CurrentStage == OrderStage.Refueling)
+                {
+                    ArmGreeting(CurrentOrder);
+                }
             }
         }
     }
@@ -303,13 +307,44 @@ public sealed class ServiceDirector : MonoBehaviour
         if (!truckArrival.Begin(carModel, pump, () =>
         {
             CurrentStage = OrderStage.Refueling;
-            ShowGreeting(order);
+            // Приветствие не выскакивает через весь двор: посетитель заговорит,
+            // когда игрок сам подойдёт к машине.
+            ArmGreeting(order);
         }))
         {
             Debug.LogWarning($"[Snowpaw Station] Не удалось запустить подъезд машины для заказа '{order.displayName}'.");
         }
 
         arrivalRoutine = null;
+    }
+
+    /// <summary>
+    /// Вешает на стоящую машину ожидание подхода игрока. Повторный вызов на уже
+    /// стоящую машину безопасен: компонент один, колбэк перезаписывается.
+    /// </summary>
+    private void ArmGreeting(Order order)
+    {
+        if (order == null || dialogue == null)
+        {
+            return;
+        }
+
+        Transform car = truckArrival != null ? truckArrival.ParkedCar : null;
+        if (car == null)
+        {
+            return;
+        }
+
+        VisitorCarGreeting.Attach(car, delegate
+        {
+            // Пока игрок шёл, заказ мог закончиться (смена, сброс) — тогда молчим.
+            if (CurrentOrder == null || CurrentOrder.id != order.id || CurrentStage != OrderStage.Refueling)
+            {
+                return;
+            }
+
+            ShowGreeting(order);
+        });
     }
 
     private void ShowGreeting(Order order)

@@ -30,6 +30,18 @@ public sealed class TruckArrivalController : MonoBehaviour
     private const string CarObjectName = "VisitorCar";
     private const string BodyPivotName = "BodyPivot";
 
+    // Машины из Assets/NpcCars крупнее, чем нужно для масштаба станции:
+    // чуть уменьшаем все, чтобы колонки не выглядели игрушечными.
+    private const float CarScale = 0.88f;
+
+    // Доля машин, встающих с внешней стороны островка колонок.
+    private const float OuterSideChance = 0.5f;
+
+    // С какой стороны островка стоит здание заправки. Передние к нему колонки
+    // встают только с внутренней стороны: пятачок между ними и входом узкий,
+    // и машина там перекрывает проход в магазин.
+    private static readonly Vector3 ShopSide = Vector3.left;
+
     // --- Характер движения. У каждой машины он свой: крейсерская скорость,
     // разгон и рывки выбираются случайно в этих пределах, поэтому две подряд
     // подъехавшие машины ведут себя по-разному.
@@ -51,6 +63,8 @@ public sealed class TruckArrivalController : MonoBehaviour
 
     private Transform truck;
     private string modelPath;
+    private bool parkOnOuterSide;
+    private bool parkedSideKnown;
     private Vector3 approachPoint;
     private Vector3 exitPoint;
     private Vector3 leavePoint;
@@ -61,6 +75,7 @@ public sealed class TruckArrivalController : MonoBehaviour
     private Motion motion;
     private Vector3 travelForward;
     private CarWheelSpin wheelSpin;
+    private CarWheelSnow wheelSnow;
     private Vector3 lastPosition;
 
     // Характер движения текущей машины.
@@ -97,6 +112,9 @@ public sealed class TruckArrivalController : MonoBehaviour
 
     /// <summary>Модель текущей машины (для восстановления после выхода из магазина).</summary>
     public string CurrentModelPath => modelPath;
+
+    /// <summary>Корень стоящей машины (null — машины на месте нет). Нужен для приветствия по подходу.</summary>
+    public Transform ParkedCar => IsParked ? truck : null;
 
     /// <summary>
     /// Точка на борту стоящей машины, обращённая к колонке pump: туда вставляется пистолет.
@@ -167,6 +185,10 @@ public sealed class TruckArrivalController : MonoBehaviour
         travelForward.y = 0f;
         travelForward = travelForward.sqrMagnitude > 0.01f ? travelForward.normalized : Vector3.forward;
 
+        // Новый посетитель — новая сторона: половина машин встаёт снаружи островка.
+        parkOnOuterSide = RollOuterSide();
+        parkedSideKnown = true;
+
         RollCharacter();
 
         truck = Instantiate(model, Vector3.zero, TravelRotation(travelForward)).transform;
@@ -178,6 +200,9 @@ public sealed class TruckArrivalController : MonoBehaviour
         // Точку остановки считаем от реальных габаритов модели: меш внутри fbx смещён,
         // из-за жёсткой константы корпус вставал прямо в колонку.
         approachPoint = ComputeApproachPoint(pump, travelForward);
+        // Стартовая точка — позади точки парковки по ходу движения, на той же
+        // боковой линии: машина подъезжает с той стороны, с которой встанет,
+        // и не проезжает сквозь островок колонок.
         exitPoint = approachPoint - travelForward * StartDistance;
         // Отъезд — дальше по ходу движения: машина уезжает вперёд, без разворота.
         leavePoint = approachPoint + travelForward * DepartDistance;
@@ -203,6 +228,8 @@ public sealed class TruckArrivalController : MonoBehaviour
         }
 
         wheelSpin = null;
+        wheelSnow = null;
+        bodyPivot = null;
         InteractionLock.Remove("truck_arrival");
         motion = Motion.None;
     }
@@ -232,6 +259,12 @@ public sealed class TruckArrivalController : MonoBehaviour
         travelForward = pump.forward;
         travelForward.y = 0f;
         travelForward = travelForward.sqrMagnitude > 0.01f ? travelForward.normalized : Vector3.forward;
+        // После магазина машина стоит там же, где стояла: сторона не перебрасывается.
+        if (!parkedSideKnown)
+        {
+            parkOnOuterSide = RollOuterSide();
+            parkedSideKnown = true;
+        }
 
         RollCharacter();
 
@@ -263,18 +296,38 @@ public sealed class TruckArrivalController : MonoBehaviour
     }
 
     /// <summary>
-    /// Куда встать: корпус машины справа от колонки, ближним бортом к ней, на земле под колонкой.
+    /// Куда встать: корпус машины рядом с колонкой, ближним бортом к ней, на земле под колонкой.
+    /// Сторона чередуется — машина встаёт и с внешней стороны островка, и с внутренней.
+    /// Внешняя сторона — та, что дальше от оси островка: у левых колонок это −X,
+    /// у правых +X, поэтому направление берём от центра всех колонок, а не от курса.
+    /// Исключение — колонки со стороны здания: у них внешняя сторона упирается во вход
+    /// в магазин, поэтому там машина встаёт только с внутренней стороны.
     /// Считаем по мировому AABB рендереров модели, поэтому любой сдвиг/масштаб узлов fbx учтён.
     /// </summary>
     private Vector3 ComputeApproachPoint(Transform pump, Vector3 forward)
     {
-        Vector3 right = Vector3.Cross(Vector3.up, forward);
-        if (right.sqrMagnitude < 0.01f)
+        Vector3 sideways = Vector3.Cross(Vector3.up, forward);
+        if (sideways.sqrMagnitude < 0.01f)
         {
-            right = Vector3.right;
+            sideways = Vector3.right;
         }
 
-        right.Normalize();
+        sideways.Normalize();
+
+        // Внешняя сторона островка: от оси колонок наружу. Если ось не найти —
+        // падаем на прежнее поведение и просто отражаем боковое направление.
+        float away = Vector3.Dot(pump.position - IslandCenter(), sideways);
+        bool outerIsPositive = away >= 0f;
+
+        // Передние к зданию колонки: внешняя сторона смотрит на вход в магазин.
+        // Там машина перекрывает проход, поэтому сторону меняем на внутреннюю.
+        Vector3 outward = outerIsPositive ? sideways : -sideways;
+        bool blockedSide = Vector3.Dot(outward, ShopSide) > 0.5f;
+        bool onOuterSide = blockedSide ? false : parkOnOuterSide;
+
+        bool positiveSide = onOuterSide ? outerIsPositive : !outerIsPositive;
+
+        Vector3 right = positiveSide ? sideways : -sideways;
 
         float pumpRadius = DefaultPumpRadius;
         float groundY = pump.position.y;
@@ -285,6 +338,12 @@ public sealed class TruckArrivalController : MonoBehaviour
             groundY = pumpCollider.bounds.min.y;
         }
 
+        return ApproachOnSide(pump, forward, right, pumpRadius, groundY);
+    }
+
+    /// <summary>Точка парковки для выбранной стороны колонки.</summary>
+    private Vector3 ApproachOnSide(Transform pump, Vector3 forward, Vector3 right, float pumpRadius, float groundY)
+    {
         if (!TryGetTruckBounds(out Bounds body))
         {
             bodyCenterOffset = Vector3.zero;
@@ -310,6 +369,27 @@ public sealed class TruckArrivalController : MonoBehaviour
             + Vector3.up * (groundY - body.min.y);
 
         return truck.position + shift;
+    }
+
+    /// <summary>
+    /// Центр островка колонок: ось, от которой считается «наружу». Считаем каждый
+    /// раз заново — колонок четыре, это дешевле, чем кэш с инвалидацией по сцене.
+    /// </summary>
+    private static Vector3 IslandCenter()
+    {
+        FuelPumpInteractable[] pumps = UnityEngine.Object.FindObjectsByType<FuelPumpInteractable>(FindObjectsSortMode.None);
+        if (pumps == null || pumps.Length == 0)
+        {
+            return Vector3.zero;
+        }
+
+        Vector3 sum = Vector3.zero;
+        for (int i = 0; i < pumps.Length; i++)
+        {
+            sum += pumps[i].transform.position;
+        }
+
+        return sum / pumps.Length;
     }
 
     /// <summary>
@@ -402,6 +482,10 @@ public sealed class TruckArrivalController : MonoBehaviour
         // У заглушки меш внутри fbx сдвинут — новый каталог это правит сам.
         NpcCarModels.ApplyLayout(assetPath, truck);
 
+        // Машины из каталога крупнее масштаба станции — уменьшаем весь корень,
+        // чтобы вместе с ним сели колёса, габариты и коллайдер.
+        truck.localScale = Vector3.one * CarScale;
+
         // Физика: кинематический Rigidbody + один корпусный бокс. Машина едет по своему
         // маршруту, но игрок и предметы не проходят сквозь неё.
         ConfigureRigidbody();
@@ -413,6 +497,8 @@ public sealed class TruckArrivalController : MonoBehaviour
 
         // Раскачка — на отдельном узле, чтобы не наклонять ни коллайдер, ни колёса.
         CreateBodyPivot();
+
+        wheelSnow = CarWheelSnow.Attach(truck, wheelSpin);
     }
 
     private void ConfigureRigidbody()
@@ -510,6 +596,16 @@ public sealed class TruckArrivalController : MonoBehaviour
         rollVelocity = 0f;
     }
 
+    /// <summary>
+    /// С какой стороны колонки встать: снаружи островка (у колонок 1-2 это −X,
+    /// у 3-4 это +X) или внутри, между колонками и навесом. Сторона выбирается
+    /// заново для каждого посетителя, поэтому обе стоянки используются вперемешку.
+    /// </summary>
+    private static bool RollOuterSide()
+    {
+        return UnityEngine.Random.value < OuterSideChance;
+    }
+
     private void Update()
     {
         if (motion == Motion.None)
@@ -578,6 +674,7 @@ public sealed class TruckArrivalController : MonoBehaviour
             Destroy(truck.gameObject);
             truck = null;
             wheelSpin = null;
+            wheelSnow = null;
             bodyPivot = null;
             motion = Motion.None;
             Action departureCallback = departed;
@@ -612,7 +709,16 @@ public sealed class TruckArrivalController : MonoBehaviour
         // Колёса крутятся ровно на пройденный путь — пробуксовки и «качения на месте» нет.
         if (wheelSpin != null)
         {
-            wheelSpin.Advance(Vector3.Dot(truck.position - before, travelForward));
+            float travelled = Vector3.Dot(truck.position - before, travelForward);
+            wheelSpin.Advance(travelled);
+
+            // Снег летит из-под колёс назад: плотность зависит от скорости,
+            // стоящая машина не сыплет вообще.
+            if (wheelSnow != null)
+            {
+                Vector3 velocity = dt > 0.0001f ? (truck.position - before) / dt : Vector3.zero;
+                wheelSnow.Advance(travelled, velocity);
+            }
         }
 
         lastPosition = truck.position;

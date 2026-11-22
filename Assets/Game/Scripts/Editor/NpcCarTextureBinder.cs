@@ -42,6 +42,105 @@ public static class NpcCarTextureBinder
             { "van-pochta", new[] { "Material_14", "Material_15", "Material_17", "Material_18" } },
         };
 
+    /// <summary>
+    /// Цвета однотонных деталей (стекло, шины, диски, кузовные вставки), выписанные
+    /// из самого FBX: свойства DiffuseColor материала. Картинки у них нет, и без
+    /// этой таблицы они остаются чёрными с глянцем — на солнце такой чёрный
+    /// выглядит белым бликом, особенно на колёсах фургона.
+    /// </summary>
+    private static readonly Dictionary<string, Dictionary<string, Color>> MatteColors =
+        new Dictionary<string, Dictionary<string, Color>>
+        {
+            { "hatchback", new Dictionary<string, Color>
+                {
+                    { "Material_3", new Color(0.0160f, 0.0160f, 0.0160f) },
+                    { "Material_10", new Color(0.7605f, 0.2051f, 0.0110f) },
+                    { "Material_11", new Color(0.0232f, 0.1590f, 0.4621f) },
+                    { "Material_12", new Color(0.0482f, 0.0685f, 0.0423f) },
+                    { "Material_13", new Color(0.0103f, 0.0103f, 0.0103f) },
+                    { "Material_14", new Color(0.0056f, 0.0056f, 0.0056f) },
+                    { "Material_15", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_16", new Color(0.0070f, 0.0070f, 0.0080f) },
+                    { "Material_22", new Color(0.2462f, 0.2623f, 0.2874f) },
+                    { "Material_25", new Color(0.4564f, 0.4793f, 0.5271f) },
+                }
+            },
+            { "jeep", new Dictionary<string, Color>
+                {
+                    { "Material_3", new Color(0.0160f, 0.0160f, 0.0160f) },
+                    { "Material_10", new Color(0.0194f, 0.0194f, 0.0232f) },
+                    { "Material_11", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_12", new Color(0.0070f, 0.0070f, 0.0080f) },
+                    { "Material_13", new Color(0.6308f, 0.6308f, 0.5271f) },
+                    { "Material_17", new Color(0.0075f, 0.0075f, 0.0103f) },
+                    { "Material_18", new Color(0.0103f, 0.0103f, 0.0103f) },
+                    { "Material_24", new Color(0.4564f, 0.4793f, 0.5271f) },
+                    { "Material_29", new Color(0.3231f, 0.3515f, 0.3916f) },
+                    { "Material_30", new Color(0.1441f, 0.0685f, 0.0232f) },
+                }
+            },
+            { "pickup", new Dictionary<string, Color>
+                {
+                    { "Material_3", new Color(0.0160f, 0.0160f, 0.0160f) },
+                    { "Material_6", new Color(0.0194f, 0.0194f, 0.0232f) },
+                    { "Material_12", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_14", new Color(0.4342f, 0.0232f, 0.0160f) },
+                    { "Material_16", new Color(0.5841f, 0.6038f, 0.6445f) },
+                    { "Material_17", new Color(0.0070f, 0.0070f, 0.0080f) },
+                    { "Material_18", new Color(0.6308f, 0.6308f, 0.5271f) },
+                    { "Material_24", new Color(0.2462f, 0.2623f, 0.2874f) },
+                    { "Material_26", new Color(0.0103f, 0.0103f, 0.0103f) },
+                    { "Material_29", new Color(0.4564f, 0.4793f, 0.5271f) },
+                }
+            },
+            { "truck1", new Dictionary<string, Color>
+                {
+                    { "Material_0", new Color(0.0194f, 0.0194f, 0.0232f) },
+                    { "Material_4", new Color(0.0160f, 0.0160f, 0.0160f) },
+                    { "Material_11", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_12", new Color(0.0070f, 0.0070f, 0.0080f) },
+                    { "Material_13", new Color(0.6867f, 0.6867f, 0.6867f) },
+                    { "Material_20", new Color(0.0103f, 0.0103f, 0.0103f) },
+                    { "Material_23", new Color(0.4564f, 0.4793f, 0.5271f) },
+                }
+            },
+            { "van-pochta", new Dictionary<string, Color>
+                {
+                    { "Material_9", new Color(0.0685f, 0.0685f, 0.0844f) },
+                    { "Material_10", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_11", new Color(0.3231f, 0.3231f, 0.3231f) },
+                    { "Material_12", new Color(0.3231f, 0.3231f, 0.3231f) },
+                    { "Material_13", new Color(0.3231f, 0.3231f, 0.3231f) },
+                    { "Material_16", new Color(0.0685f, 0.0685f, 0.0844f) },
+                    { "Material_19", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_20", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_21", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_22", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_23", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_24", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_25", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_26", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_27", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_28", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_29", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_30", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_31", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_32", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_33", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_34", new Color(0.5841f, 0.3968f, 0.1441f) },
+                    { "Material_35", new Color(0.0232f, 0.0232f, 0.0273f) },
+                    { "Material_36", new Color(0.0075f, 0.0075f, 0.0086f) },
+                    { "Material_37", new Color(0.3231f, 0.3231f, 0.3231f) },
+                    { "Material_38", new Color(0.0075f, 0.0075f, 0.0086f) },
+                    { "Material_39", new Color(0.3231f, 0.3231f, 0.3231f) },
+                    { "Material_40", new Color(0.0075f, 0.0075f, 0.0086f) },
+                    { "Material_41", new Color(0.3231f, 0.3231f, 0.3231f) },
+                    { "Material_42", new Color(0.0075f, 0.0075f, 0.0086f) },
+                    { "Material_43", new Color(0.3231f, 0.3231f, 0.3231f) },
+                }
+            },
+        };
+
     [MenuItem("Tools/Snowpaw/Привязать текстуры машин NPC")]
     public static void BindAll()
     {
@@ -90,6 +189,12 @@ public static class NpcCarTextureBinder
             lightNames = new string[0];
         }
 
+        Dictionary<string, Color> matteColors;
+        if (!MatteColors.TryGetValue(modelKey, out matteColors))
+        {
+            matteColors = new Dictionary<string, Color>();
+        }
+
         // Материалы берём с рендереров, а не из LoadAllAssetsAtPath: после первого
         // прогона часть из них уже подменена нашими .mat, и список встроенных
         // пустеет — из-за этого повторный запуск ничего не делал.
@@ -113,7 +218,10 @@ public static class NpcCarTextureBinder
             var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
             bool isLight = System.Array.IndexOf(lightNames, materialName) >= 0;
 
-            if (texture == null && !isLight)
+            Color matteColor;
+            bool hasMatte = matteColors.TryGetValue(materialName, out matteColor);
+
+            if (texture == null && !isLight && !hasMatte)
             {
                 continue;
             }
@@ -136,6 +244,15 @@ public static class NpcCarTextureBinder
                 material.SetFloat("_Metallic", 0f);
                 material.SetFloat("_Smoothness", 0.15f);
                 bound++;
+            }
+            else if (hasMatte && !isLight)
+            {
+                // Деталь без картинки (стекло, шины, диски): цвет берём из FBX.
+                // Оставлять её чёрной с гладкостью 0.8 нельзя — такой чёрный
+                // зеркалит небо и читается как белое пятно.
+                material.SetColor("_BaseColor", matteColor);
+                material.SetFloat("_Metallic", 0f);
+                material.SetFloat("_Smoothness", 0.1f);
             }
 
             if (isLight)

@@ -88,7 +88,7 @@ public sealed class PsxLowResolution : MonoBehaviour
 
     [Header("Разрешение")]
     [SerializeField, Min(60)]
-    [Tooltip("Строк по вертикали. 240 — классика PS1, 180 — жёстче, 360 — мягче.")]
+    [Tooltip("Строк по вертикали. 240 — классика PS1, 180 — жёстче, ниже 180 — совсем грубо.")]
     private int targetHeight = 240;
 
     [SerializeField]
