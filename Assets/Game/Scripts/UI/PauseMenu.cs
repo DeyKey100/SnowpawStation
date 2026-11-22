@@ -99,7 +99,7 @@ public sealed class PauseMenu : MonoBehaviour
             return;
         }
 
-        if (AdminPanel.IsOpen || !IsEscapePressed())
+        if (AdminPanel.IsOpen || RadioMusicUI.BlocksPauseInput || !IsEscapePressed())
         {
             return;
         }
@@ -227,7 +227,7 @@ public sealed class PauseMenu : MonoBehaviour
         EnsureStyles();
 
         float width = Mathf.Min(panelWidth, Screen.width - 40f);
-        float height = settingsOpen ? 554f : 250f;
+        float height = settingsOpen ? 432f : 250f;
         Rect panel = new Rect(
             (Screen.width - width) * 0.5f,
             (Screen.height - height) * 0.5f,
@@ -264,59 +264,30 @@ public sealed class PauseMenu : MonoBehaviour
         }
 
         if (audioManager == null) { audioManager = AudioManager.EnsureInstance(); }
-        bool musicEnabled = audioManager.IsMusicEnabled;
-        string musicLabel = $"Музыка: {(musicEnabled ? "Вкл" : "Выкл")}";
-
-        if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), musicLabel, buttonStyle))
-        {
-            audioManager.SetMusicEnabled(!musicEnabled);
-            audioManager.PlayUiClick();
-        }
-
-        y += buttonHeight + 14f;
-
-        float currentVolume = audioManager.MusicVolume;
-        GUI.Label(
-            new Rect(x, y, buttonWidth, 24f),
-            $"Громкость музыки: {currentVolume * 100f:0}%",
-            labelStyle);
-        y += 28f;
-
-        float newVolume = GUI.HorizontalSlider(new Rect(x, y, buttonWidth, 20f), currentVolume, 0f, 1f);
-        if (!Mathf.Approximately(newVolume, currentVolume))
-        {
-            audioManager.SetMusicVolume(newVolume);
-            PlaySliderFeedback();
-        }
-        y += 44f;
-
-        GUI.Label(new Rect(x, y, buttonWidth, 24f),
-            audioManager.IsReady ? $"Трек: {audioManager.CurrentTrackName}" : "Музыка: загрузка…", labelStyle);
-        y += 28f;
-        float trackButtonWidth = (buttonWidth - 12f) * 0.5f;
-        bool previousGuiEnabled = GUI.enabled;
-        GUI.enabled = previousGuiEnabled && audioManager.PlaylistCount > 1;
-        if (GUI.Button(new Rect(x, y, trackButtonWidth, 32f), "Предыдущий", buttonStyle))
-        {
-            audioManager.PreviousTrack();
-            audioManager.PlayUiClick();
-        }
-        if (GUI.Button(new Rect(x + trackButtonWidth + 12f, y, trackButtonWidth, 32f), "Следующий", buttonStyle))
-        {
-            audioManager.NextTrack();
-            audioManager.PlayUiClick();
-        }
-        GUI.enabled = previousGuiEnabled;
-        y += 46f;
-
         float currentSfxVolume = audioManager.SfxVolume;
-        GUI.Label(new Rect(x, y, buttonWidth, 24f),
+        // Строка «Громкость звуков» с запасом по высоте: у пиксельного шрифта
+        // нижние выносные элементы глифов упирались в 24 px и текст подрезался.
+        const float sfxLabelHeight = 30f;
+        GUI.Label(new Rect(x, y, buttonWidth, sfxLabelHeight),
             $"Громкость звуков: {currentSfxVolume * 100f:0}%", labelStyle);
-        y += 28f;
+        y += sfxLabelHeight + 4f;
         float newSfxVolume = GUI.HorizontalSlider(new Rect(x, y, buttonWidth, 20f), currentSfxVolume, 0f, 1f);
         if (!Mathf.Approximately(newSfxVolume, currentSfxVolume))
         {
             audioManager.SetSfxVolume(newSfxVolume);
+            PlaySliderFeedback();
+        }
+        y += 44f;
+
+        float currentMusicVolume = audioManager.MusicVolume;
+        const float musicLabelHeight = 30f;
+        GUI.Label(new Rect(x, y, buttonWidth, musicLabelHeight),
+            $"Громкость музыки: {currentMusicVolume * 100f:0}%", labelStyle);
+        y += musicLabelHeight + 4f;
+        float newMusicVolume = GUI.HorizontalSlider(new Rect(x, y, buttonWidth, 20f), currentMusicVolume, 0f, 1f);
+        if (!Mathf.Approximately(newMusicVolume, currentMusicVolume))
+        {
+            audioManager.SetMusicVolume(newMusicVolume);
             PlaySliderFeedback();
         }
         y += 44f;
