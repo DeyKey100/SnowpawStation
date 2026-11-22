@@ -48,6 +48,7 @@ public sealed class NightEvents : MonoBehaviour
     private void OnDayStarted(int day)
     {
         running = false;
+        RadioInteractable.Instance?.StopRadioAudio();
     }
 
     private void OnPhaseChanged(int day, DayLoopManager.DayState state)
@@ -156,6 +157,7 @@ public sealed class NightEvents : MonoBehaviour
     internal void CancelForDaySkip()
     {
         running = false;
+        RadioInteractable.Instance?.StopRadioAudio();
         if (dialogue != null)
         {
             dialogue.DialogueFinished -= OnNight1Finished;

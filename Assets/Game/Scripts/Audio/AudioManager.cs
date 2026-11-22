@@ -87,6 +87,7 @@ public sealed class AudioManager : MonoBehaviour
     public float SfxVolume { get; private set; }
     public float EffectiveMusicVolume => MusicVolume * musicGain;
     public bool IsMusicSuppressed => suppressors.Count > 0;
+    public bool IsMusicSilent => !initialized || !isActiveAndEnabled || envelope <= 0f;
     public bool IsMusicPlaying => initialized && !sourcesPaused && envelope > 0f &&
         (musicSources[0].isPlaying || musicSources[1].isPlaying);
     public int PlaylistCount => playlist.Count;

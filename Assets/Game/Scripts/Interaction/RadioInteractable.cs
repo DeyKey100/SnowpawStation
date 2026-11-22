@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -34,6 +35,8 @@ public class RadioStoryBroadcast
 public class RadioInteractable : MonoBehaviour, IInteractable
 {
     public static RadioInteractable Instance { get; private set; }
+    private const float PostVoiceStaticDuration = 3f;
+    private const float PostVoiceStaticVolume = 0.12f;
 
     [Header("Prompts")]
     [SerializeField] private string turnOnPrompt = "[E] Включить радио";
@@ -65,9 +68,13 @@ public class RadioInteractable : MonoBehaviour, IInteractable
     [SerializeField] private bool suppressBackgroundDuringBroadcast = true;
 
     private AudioManager audioManager;
+    private RadioMusicUI musicUI;
     private float radioLocalVolume = 1f;
     private double broadcastEndDsp;
     private bool ownsMusicSuppression;
+    private Coroutine pendingBroadcast;
+    private bool postVoiceStaticPending;
+    private bool timedStaticPlaying;
 
     // Основной динамик радио и источник для щелчка тумблера
     private AudioSource radioSource;
@@ -90,6 +97,7 @@ public class RadioInteractable : MonoBehaviour, IInteractable
         Instance = this;
         audioManager = AudioManager.EnsureInstance();
         EnsureAudioSources();
+        if (!TryGetComponent(out musicUI)) { musicUI = gameObject.AddComponent<RadioMusicUI>(); }
     }
 
     private void OnEnable()
@@ -101,11 +109,26 @@ public class RadioInteractable : MonoBehaviour, IInteractable
 
     private void Update()
     {
-        // DSP time freezes with listener pause, including a delayed broadcast.
-        if (ownsMusicSuppression && radioSource != null && !radioSource.loop &&
-            !AudioListener.pause && AudioSettings.dspTime >= broadcastEndDsp && !radioSource.isPlaying)
+        // DSP time freezes with listener pause, including a delayed broadcast and the static tail.
+        if (pendingBroadcast != null || radioSource == null || AudioListener.pause) { return; }
+
+        double dspTime = AudioSettings.dspTime;
+        if (timedStaticPlaying)
         {
-            SetBackgroundSuppressed(false);
+            if (dspTime >= broadcastEndDsp) { StopRadioAudio(); }
+            return;
+        }
+
+        if (!radioSource.loop && dspTime >= broadcastEndDsp && !radioSource.isPlaying)
+        {
+            if (postVoiceStaticPending)
+            {
+                BeginPostVoiceStatic();
+            }
+            else if (ownsMusicSuppression)
+            {
+                SetBackgroundSuppressed(false);
+            }
         }
     }
 
@@ -121,6 +144,7 @@ public class RadioInteractable : MonoBehaviour, IInteractable
 
     private void OnDisable()
     {
+        if (musicUI != null) { musicUI.Close(); }
         if (audioManager != null) { audioManager.SfxVolumeChanged -= ApplySfxVolume; }
         StopRadioAudio();
         UnsubscribeDialogueEvents();
@@ -184,7 +208,7 @@ public class RadioInteractable : MonoBehaviour, IInteractable
             return storyRadioPrompt;
         }
 
-        return IsPlaying ? turnOffPrompt : turnOnPrompt;
+        return RadioMusicUI.InteractPrompt;
     }
 
     public void Interact()
@@ -195,7 +219,7 @@ public class RadioInteractable : MonoBehaviour, IInteractable
             return;
         }
 
-        ToggleStatic();
+        musicUI.Open();
     }
 
     // ================= Ночной сюжет =================
@@ -249,17 +273,108 @@ public class RadioInteractable : MonoBehaviour, IInteractable
     public void PlayStoryBroadcast(int day)
     {
         RadioStoryBroadcast broadcast = GetBroadcastForDay(day);
+        if (day == 2 && (broadcast == null || broadcast.broadcastClip == null))
+        {
+            // The second night's transmission comes through interference, not the music playlist.
+            AudioClip noise = StaticNoiseClip;
+            PlayClip(noise, staticVolume, loop: true, delay: SwitchClickDuration);
+            if (noise != null)
+            {
+                SetBackgroundSuppressed(suppressBackgroundDuringBroadcast);
+                SubscribeDialogueEvents(); // A noise loop must stop when this story dialogue ends.
+            }
+            return;
+        }
+
         if (broadcast == null || broadcast.broadcastClip == null)
         {
             return;
         }
 
-        PlayClip(broadcast.broadcastClip, broadcast.volume, broadcast.loop, SwitchClickDuration);
-
+        StopRadioAudio();
+        SetBackgroundSuppressed(suppressBackgroundDuringBroadcast && broadcast.broadcastClip != StaticNoiseClip);
         if (broadcast.stopOnDialogueEnd)
         {
             SubscribeDialogueEvents();
         }
+        pendingBroadcast = StartCoroutine(PlayStoryBroadcastWhenReady(
+            broadcast.broadcastClip, broadcast.volume, broadcast.loop, broadcast.stopOnDialogueEnd, day == 1));
+    }
+
+    private IEnumerator PlayStoryBroadcastWhenReady(AudioClip clip, float volume, bool loop, bool stopOnDialogueEnd, bool appendStatic)
+    {
+        double clickEndDsp = AudioSettings.dspTime + SwitchClickDuration;
+        yield return null; // Assign the pending handle before any completion or cancellation.
+
+        if (clip != null && clip.loadState == AudioDataLoadState.Unloaded)
+        {
+            clip.LoadAudioData();
+        }
+
+        while (clip != null && (clip.loadState == AudioDataLoadState.Loading || AudioListener.pause ||
+            AudioSettings.dspTime < clickEndDsp ||
+            (ownsMusicSuppression && audioManager != null && !audioManager.IsMusicSilent)))
+        {
+            yield return null;
+        }
+
+        pendingBroadcast = null; // PlayClip must not cancel its own coroutine.
+        if (clip == null || clip.loadState != AudioDataLoadState.Loaded)
+        {
+            StopRadioAudio();
+            Debug.LogWarning("[Snowpaw Station] Не удалось загрузить аудио сюжетного радио.", this);
+            yield break;
+        }
+
+        PlayClip(clip, volume, loop);
+        postVoiceStaticPending = appendStatic && !loop && clip != StaticNoiseClip;
+        if (stopOnDialogueEnd)
+        {
+            SubscribeDialogueEvents();
+        }
+    }
+
+    private void BeginPostVoiceStatic()
+    {
+        postVoiceStaticPending = false;
+        pendingBroadcast = StartCoroutine(PlayPostVoiceStaticWhenReady(StaticNoiseClip));
+    }
+
+    private IEnumerator PlayPostVoiceStaticWhenReady(AudioClip noise)
+    {
+        yield return null; // The tail uses the same cancellable pending handle as the voice.
+        if (noise != null && noise.loadState == AudioDataLoadState.Unloaded)
+        {
+            noise.LoadAudioData();
+        }
+        while (noise != null && (noise.loadState == AudioDataLoadState.Loading || AudioListener.pause))
+        {
+            yield return null;
+        }
+
+        pendingBroadcast = null;
+        if (noise == null || noise.loadState != AudioDataLoadState.Loaded)
+        {
+            StopRadioAudio();
+            Debug.LogWarning("[Snowpaw Station] Не удалось загрузить помехи радио.", this);
+            yield break;
+        }
+
+        // Continue the same broadcast: retain its music blocker and dialogue subscription.
+        radioSource.clip = noise;
+        radioSource.loop = true;
+        radioLocalVolume = PostVoiceStaticVolume;
+        ApplySfxVolume(audioManager.SfxVolume);
+        broadcastEndDsp = AudioSettings.dspTime + PostVoiceStaticDuration;
+        timedStaticPlaying = true;
+        radioSource.Play();
+    }
+
+    private void CancelPendingBroadcast()
+    {
+        if (pendingBroadcast == null) { return; }
+        StopCoroutine(pendingBroadcast);
+        pendingBroadcast = null;
     }
 
     /// <summary>
@@ -268,8 +383,12 @@ public class RadioInteractable : MonoBehaviour, IInteractable
     /// </summary>
     public void PlayClip(AudioClip clip, float volume = 0.8f, bool loop = false, float delay = 0f)
     {
+        CancelPendingBroadcast();
+        postVoiceStaticPending = false;
+        timedStaticPlaying = false;
         EnsureAudioSources();
 
+        UnsubscribeDialogueEvents();
         radioSource.Stop();
         SetBackgroundSuppressed(false);
 
@@ -345,6 +464,10 @@ public class RadioInteractable : MonoBehaviour, IInteractable
     /// <summary>Мгновенный обрыв звучания радио.</summary>
     public void StopRadioAudio()
     {
+        CancelPendingBroadcast();
+        postVoiceStaticPending = false;
+        timedStaticPlaying = false;
+        UnsubscribeDialogueEvents();
         if (radioSource != null) { radioSource.Stop(); } // Also cancels a delayed or paused broadcast.
         SetBackgroundSuppressed(false);
         Debug.Log("[Snowpaw Station] Радио выключено.");
