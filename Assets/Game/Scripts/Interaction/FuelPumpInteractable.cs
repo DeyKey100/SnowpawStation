@@ -16,7 +16,7 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
     private const float LitersPerSecond = 8f;
     private const float IdleCancelSeconds = 2f;
 
-    // Шланг: провисающая линия от колонки к борту трака + утолщённый конец ("пистолет").
+    // Шланг: провисающая линия от колонки к борту машины + утолщённый конец ("пистолет").
     private const int HoseSegments = 10;
     private const float HoseSag = 0.45f;
     private const float HoseWidth = 0.05f;
@@ -149,8 +149,8 @@ public sealed class FuelPumpInteractable : MonoBehaviour, IInteractable
     }
 
     /// <summary>
-    /// Пока идёт заправка — шланг от колонки к борту стоящего трака.
-    /// Нет трака у колонки (или он у другой) — шланга нет.
+    /// Пока идёт заправка — шланг от колонки к борту стоящей машины.
+    /// Нет машины у колонки (или она у другой) — шланга нет.
     /// </summary>
     private void UpdateHose()
     {

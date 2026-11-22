@@ -16,11 +16,11 @@ public sealed class SnowPileSpawner : MonoBehaviour
     private const int MaxPileCount = 6;
 
     // Координаты выбраны по мировым bounds StationMain, не по смещённым pivot FBX.
-    // Центральные островки колонок и полоса движения трака справа от них свободны.
+    // Центральные островки колонок и полоса движения машины справа от них свободны.
     private static readonly Vector3[] SpawnPositions =
     {
         new Vector3(-13.7f, 0.75f, -4.7f),  // подход к магазину с юга
-        new Vector3(-7.1f, 0.75f, -6.35f),  // южный подход к колонке №1, левее полосы трака
+        new Vector3(-7.1f, 0.75f, -6.35f),  // южный подход к колонке №1, левее полосы машины
         new Vector3(-7.1f, 0.75f, -8.95f),  // продолжение подхода к колонке №1
         new Vector3(-17.5f, 0.75f, -5.5f),  // западный двор, в стороне от колоды
         new Vector3(-15f, 0.75f, -8.5f),

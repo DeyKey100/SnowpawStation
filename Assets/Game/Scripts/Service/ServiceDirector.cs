@@ -291,19 +291,22 @@ public sealed class ServiceDirector : MonoBehaviour
         Transform pump = FindPump(order.pumpIndex);
         if (pump == null)
         {
-            Debug.LogError($"[Snowpaw Station] Не найдена колонка №{order.pumpIndex + 1} для подъезда трака.");
+            Debug.LogError($"[Snowpaw Station] Не найдена колонка №{order.pumpIndex + 1} для подъезда машины.");
             arrivalRoutine = null;
             yield break;
         }
 
         // 3. Запускаем физический подъезд машины (без задержки внутри контроллера).
-        if (!truckArrival.Begin(pump, () =>
+        // Обычный посетитель приезжает на случайной модели из Assets/NpcCars,
+        // сюжетный гость — пока на заглушке: у него будет своя машина.
+        string carModel = order.isGuest ? NpcCarModels.PlaceholderPath : NpcCarModels.RandomVisitorPath();
+        if (!truckArrival.Begin(carModel, pump, () =>
         {
             CurrentStage = OrderStage.Refueling;
             ShowGreeting(order);
         }))
         {
-            Debug.LogWarning($"[Snowpaw Station] Не удалось запустить подъезд трака для заказа '{order.displayName}'.");
+            Debug.LogWarning($"[Snowpaw Station] Не удалось запустить подъезд машины для заказа '{order.displayName}'.");
         }
 
         arrivalRoutine = null;
@@ -322,7 +325,7 @@ public sealed class ServiceDirector : MonoBehaviour
             case "courier": dialogue.Show(StoryDialogues.CourierGreeting()); break;
             case "danila": dialogue.Show(StoryDialogues.DanilaGreeting()); break;
             case "red_pickup": dialogue.Show(StoryDialogues.PickupArrival()); break;
-            default: dialogue.Show(StoryDialogues.RegularCarGreeting(order.displayName, order.liters)); break;
+            default: dialogue.Show(StoryDialogues.RegularCarGreeting(order.liters)); break;
         }
     }
 
