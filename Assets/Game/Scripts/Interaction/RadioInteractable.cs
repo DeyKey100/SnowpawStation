@@ -61,14 +61,22 @@ public class RadioInteractable : MonoBehaviour, IInteractable
     [SerializeField] private bool spatial3D = true;
     [SerializeField] private float minDistance = 1.5f;
     [SerializeField] private float maxDistance = 12f;
+    [Tooltip("Temporarily pause background music during a story broadcast, without changing the user's music preference.")]
+    [SerializeField] private bool suppressBackgroundDuringBroadcast = true;
+
+    private AudioManager audioManager;
+    private float radioLocalVolume = 1f;
+    private double broadcastEndDsp;
+    private bool ownsMusicSuppression;
 
     // Основной динамик радио и источник для щелчка тумблера
     private AudioSource radioSource;
     private AudioSource sfxSource;
 
+    private AudioClip StaticNoiseClip => staticClip != null ? staticClip : AudioLibrary.FindSfx("Radio_Static_Loop.ogg");
     public bool IsPlaying => radioSource != null && radioSource.isPlaying;
-    public bool IsStaticOn => IsPlaying && radioSource.clip == staticClip;
-    public bool IsBroadcastPlaying => IsPlaying && radioSource.clip != staticClip;
+    public bool IsStaticOn => IsPlaying && radioSource.clip == StaticNoiseClip;
+    public bool IsBroadcastPlaying => IsPlaying && radioSource.clip != StaticNoiseClip;
     public bool IsNoiseOn => IsStaticOn; // Обратная совместимость
 
     private void Awake()
@@ -80,7 +88,25 @@ public class RadioInteractable : MonoBehaviour, IInteractable
         }
 
         Instance = this;
+        audioManager = AudioManager.EnsureInstance();
         EnsureAudioSources();
+    }
+
+    private void OnEnable()
+    {
+        if (Instance != this) { return; }
+        audioManager.SfxVolumeChanged += ApplySfxVolume;
+        ApplySfxVolume(audioManager.SfxVolume);
+    }
+
+    private void Update()
+    {
+        // DSP time freezes with listener pause, including a delayed broadcast.
+        if (ownsMusicSuppression && radioSource != null && !radioSource.loop &&
+            !AudioListener.pause && AudioSettings.dspTime >= broadcastEndDsp && !radioSource.isPlaying)
+        {
+            SetBackgroundSuppressed(false);
+        }
     }
 
     private void OnDestroy()
@@ -95,12 +121,14 @@ public class RadioInteractable : MonoBehaviour, IInteractable
 
     private void OnDisable()
     {
+        if (audioManager != null) { audioManager.SfxVolumeChanged -= ApplySfxVolume; }
         StopRadioAudio();
         UnsubscribeDialogueEvents();
     }
 
     private void EnsureAudioSources()
     {
+        if (radioSource != null && sfxSource != null) { return; }
         AudioSource[] sources = GetComponents<AudioSource>();
         if (sources.Length >= 2)
         {
@@ -213,7 +241,9 @@ public class RadioInteractable : MonoBehaviour, IInteractable
 
     // ================= Воспроизведение =================
 
-    private float SwitchClickDuration => switchClickClip != null ? switchClickClip.length : 0f;
+    private AudioClip SwitchClick => switchClickClip != null ? switchClickClip :
+        AudioLibrary.FindSfx("Button.wav") ?? AudioLibrary.FindSfx("WAV/Winter UI/ui_select_01.wav");
+    private float SwitchClickDuration => SwitchClick != null ? SwitchClick.length : 0f;
 
     /// <summary>Воспроизвести сюжетный эфир для указанного игрового дня.</summary>
     public void PlayStoryBroadcast(int day)
@@ -241,6 +271,7 @@ public class RadioInteractable : MonoBehaviour, IInteractable
         EnsureAudioSources();
 
         radioSource.Stop();
+        SetBackgroundSuppressed(false);
 
         if (clip == null)
         {
@@ -250,7 +281,10 @@ public class RadioInteractable : MonoBehaviour, IInteractable
 
         radioSource.clip = clip;
         radioSource.loop = loop;
-        radioSource.volume = volume;
+        radioLocalVolume = Mathf.Clamp01(volume);
+        ApplySfxVolume(audioManager.SfxVolume);
+        broadcastEndDsp = AudioSettings.dspTime + Mathf.Max(0f, delay) + clip.length;
+        SetBackgroundSuppressed(suppressBackgroundDuringBroadcast && clip != StaticNoiseClip);
 
         if (delay > 0f)
         {
@@ -287,13 +321,13 @@ public class RadioInteractable : MonoBehaviour, IInteractable
         }
         else
         {
-            PlayClip(staticClip, staticVolume, loop: true, SwitchClickDuration);
+            PlayClip(StaticNoiseClip, staticVolume, loop: true, SwitchClickDuration);
         }
     }
 
     public void PlaySwitchClick()
     {
-        PlaySfx(switchClickClip, 0.7f);
+        PlaySfx(SwitchClick, 0.7f);
     }
 
     public void PlaySfx(AudioClip clip, float volume = 1f)
@@ -303,19 +337,29 @@ public class RadioInteractable : MonoBehaviour, IInteractable
             return;
         }
 
-        EnsureAudioSources();
-        sfxSource.PlayOneShot(clip, volume);
+        if (audioManager == null) { audioManager = AudioManager.EnsureInstance(); }
+        audioManager.PlaySfx(clip, transform.position, Mathf.Clamp01(volume), spatial3D ? 1f : 0f,
+            1f, false, minDistance, maxDistance);
     }
 
     /// <summary>Мгновенный обрыв звучания радио.</summary>
     public void StopRadioAudio()
     {
-        if (radioSource != null && radioSource.isPlaying)
-        {
-            radioSource.Stop();
-        }
-
+        if (radioSource != null) { radioSource.Stop(); } // Also cancels a delayed or paused broadcast.
+        SetBackgroundSuppressed(false);
         Debug.Log("[Snowpaw Station] Радио выключено.");
+    }
+
+    private void ApplySfxVolume(float value)
+    {
+        if (radioSource != null) { radioSource.volume = radioLocalVolume * value; }
+        if (sfxSource != null) { sfxSource.volume = value; }
+    }
+
+    private void SetBackgroundSuppressed(bool value)
+    {
+        ownsMusicSuppression = value;
+        if (audioManager != null) { audioManager.SuppressMusic(this, value); }
     }
 
     // ================= Синхронизация с диалогами =================

@@ -129,6 +129,7 @@ public class PlayerInteraction : MonoBehaviour
         IInteractable target = focused.ResolveTarget();
         if (target != null)
         {
+            focused.NotifyInteraction();
             target.Interact();
         }
     }

@@ -35,8 +35,27 @@ public class ProximityInteractable : MonoBehaviour
     private Vector3 plateAnchor;
     private float nextBoundsRefresh;
 
+    /// <summary>Accepted interaction input; emitted before the target can destroy itself.</summary>
+    public event System.Action Interacted;
+
     /// <summary>Игрок в радиусе (выставляет PlayerInteraction при выборе ближайшего).</summary>
     public bool PlayerInRange { get; set; }
+
+    private void Awake()
+    {
+        IInteractable target = ResolveTarget();
+        if (target is RadioInteractable) { return; } // Radio already owns its switch sound.
+        if (!TryGetComponent(out SfxEmitter emitter)) { emitter = gameObject.AddComponent<SfxEmitter>(); }
+        string sound = target is WoodPileInteractable || target is StoveInteractable
+            ? "WAV/Fireside/log_drop_01.wav"
+            : target is SnowPileInteractable ? "WAV/Snow Play/snowball_hit_soft_01.wav"
+            : target is ShopCoffeeCupInteractable ? "WAV/Fireside/mug_clink_01.wav"
+            : target is DoorInteractable ? "WAV/Weather/door_open_wind_01.wav"
+            : "WAV/Winter UI/ui_select_01.wav";
+        emitter.ConfigureFallback(sound);
+    }
+
+    public void NotifyInteraction() => Interacted?.Invoke();
 
     public Vector3 PlateWorldPoint => plateAnchor;
 

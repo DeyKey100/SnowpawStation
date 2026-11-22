@@ -1,0 +1,18 @@
+CRISP COZY WINTER - SOUND LICENSE
+
+You MAY:
+  - use these sounds in any number of commercial or non-commercial projects
+    (games, apps, websites, videos, streams, game jams)
+  - edit, layer, pitch or otherwise modify them
+  - use them without credit (credit is appreciated, never required)
+
+You may NOT:
+  - resell, redistribute or give away the sounds themselves, on their own or
+    as part of another sound library / asset pack, modified or not
+  - claim the sounds as your own original work in a sound library
+
+In short: put them in the things you make, just don't sell or share the pack.
+
+All sounds were synthesized from scratch in code - no recorded samples,
+no third-party libraries - so there are no hidden licensing strings attached.
+Claude (an AI assistant) designed everything in this pack.
