@@ -20,7 +20,11 @@ public sealed class PauseMenu : MonoBehaviour
 
     public static bool IsPaused { get; private set; }
 
+    private AudioManager audioManager;
     private StarterAssetsInputs playerInputs;
+    private bool previousAudioListenerPause;
+    private float nextSliderFeedbackTime;
+    private float lastSliderFeedbackTime;
     private bool previousCursorLocked = true;
     private bool previousCursorInputForLook = true;
     private bool settingsOpen;
@@ -81,11 +85,8 @@ public sealed class PauseMenu : MonoBehaviour
 
         persistent = this;
 
-        if (musicPlayer == null)
-        {
-            musicPlayer = FindFirstObjectByType<MusicPlayer>();
-        }
-
+        // musicPlayer remains serialized only to preserve existing scene references.
+        audioManager = AudioManager.EnsureInstance();
         RefreshBlizzardReference();
     }
 
@@ -98,7 +99,7 @@ public sealed class PauseMenu : MonoBehaviour
             return;
         }
 
-        if (AdminPanel.IsOpen || !IsEscapePressed())
+        if (AdminPanel.IsOpen || RadioMusicUI.BlocksPauseInput || !IsEscapePressed())
         {
             return;
         }
@@ -110,6 +111,8 @@ public sealed class PauseMenu : MonoBehaviour
         else if (settingsOpen)
         {
             settingsOpen = false;
+            audioManager.PlayUiBack();
+            audioManager.SavePreferences();
         }
         else
         {
@@ -119,7 +122,7 @@ public sealed class PauseMenu : MonoBehaviour
 
     private void OnDisable()
     {
-        if (IsPaused)
+        if (persistent == this && IsPaused)
         {
             RestoreTimeScale();
         }
@@ -155,6 +158,10 @@ public sealed class PauseMenu : MonoBehaviour
             return;
         }
 
+        if (audioManager == null) { audioManager = AudioManager.EnsureInstance(); }
+        audioManager.PlayUiSelect();
+        previousAudioListenerPause = AudioListener.pause;
+        AudioListener.pause = true;
         IsPaused = true;
         settingsOpen = false;
         Time.timeScale = 0f;
@@ -187,6 +194,7 @@ public sealed class PauseMenu : MonoBehaviour
             return;
         }
 
+        if (audioManager != null) { audioManager.PlayUiBack(); }
         IsPaused = false;
         settingsOpen = false;
         RestoreTimeScale();
@@ -205,6 +213,8 @@ public sealed class PauseMenu : MonoBehaviour
     {
         IsPaused = false;
         Time.timeScale = 1f;
+        AudioListener.pause = previousAudioListenerPause;
+        if (audioManager != null) { audioManager.SavePreferences(); }
     }
 
     private void OnGUI()
@@ -217,7 +227,7 @@ public sealed class PauseMenu : MonoBehaviour
         EnsureStyles();
 
         float width = Mathf.Min(panelWidth, Screen.width - 40f);
-        float height = settingsOpen ? 426f : 250f;
+        float height = settingsOpen ? 432f : 250f;
         Rect panel = new Rect(
             (Screen.width - width) * 0.5f,
             (Screen.height - height) * 0.5f,
@@ -247,38 +257,39 @@ public sealed class PauseMenu : MonoBehaviour
             if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), "Настройки", buttonStyle))
             {
                 settingsOpen = true;
+                audioManager.PlayUiClick();
             }
 
             return;
         }
 
-        bool musicEnabled = musicPlayer != null && musicPlayer.IsEnabled;
-        string musicLabel = musicPlayer == null
-            ? "Музыка: недоступна"
-            : $"Музыка: {(musicEnabled ? "Вкл" : "Выкл")}";
-
-        if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), musicLabel, buttonStyle) &&
-            musicPlayer != null)
+        if (audioManager == null) { audioManager = AudioManager.EnsureInstance(); }
+        float currentSfxVolume = audioManager.SfxVolume;
+        // Строка «Громкость звуков» с запасом по высоте: у пиксельного шрифта
+        // нижние выносные элементы глифов упирались в 24 px и текст подрезался.
+        const float sfxLabelHeight = 30f;
+        GUI.Label(new Rect(x, y, buttonWidth, sfxLabelHeight),
+            $"Громкость звуков: {currentSfxVolume * 100f:0}%", labelStyle);
+        y += sfxLabelHeight + 4f;
+        float newSfxVolume = GUI.HorizontalSlider(new Rect(x, y, buttonWidth, 20f), currentSfxVolume, 0f, 1f);
+        if (!Mathf.Approximately(newSfxVolume, currentSfxVolume))
         {
-            musicPlayer.SetEnabled(!musicEnabled);
+            audioManager.SetSfxVolume(newSfxVolume);
+            PlaySliderFeedback();
         }
+        y += 44f;
 
-        y += buttonHeight + 14f;
-
-        float currentVolume = musicPlayer != null ? musicPlayer.Volume : 0f;
-        GUI.Label(
-            new Rect(x, y, buttonWidth, 24f),
-            $"Громкость музыки: {currentVolume * 100f:0}%",
-            labelStyle);
-
-        y += 28f;
-
-        float newVolume = GUI.HorizontalSlider(new Rect(x, y, buttonWidth, 20f), currentVolume, 0f, 1f);
-        if (musicPlayer != null && !Mathf.Approximately(newVolume, currentVolume))
+        float currentMusicVolume = audioManager.MusicVolume;
+        const float musicLabelHeight = 30f;
+        GUI.Label(new Rect(x, y, buttonWidth, musicLabelHeight),
+            $"Громкость музыки: {currentMusicVolume * 100f:0}%", labelStyle);
+        y += musicLabelHeight + 4f;
+        float newMusicVolume = GUI.HorizontalSlider(new Rect(x, y, buttonWidth, 20f), currentMusicVolume, 0f, 1f);
+        if (!Mathf.Approximately(newMusicVolume, currentMusicVolume))
         {
-            musicPlayer.SetVolume(newVolume);
+            audioManager.SetMusicVolume(newMusicVolume);
+            PlaySliderFeedback();
         }
-
         y += 44f;
 
         RefreshBlizzardReference();
@@ -291,6 +302,7 @@ public sealed class PauseMenu : MonoBehaviour
             blizzardManager != null)
         {
             blizzardManager.SetEnabled(!snowEnabled);
+            audioManager.PlayUiClick();
         }
 
         y += buttonHeight + 14f;
@@ -316,7 +328,19 @@ public sealed class PauseMenu : MonoBehaviour
         if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), "Назад", buttonStyle))
         {
             settingsOpen = false;
+            audioManager.PlayUiBack();
+            audioManager.SavePreferences();
         }
+    }
+
+    private void PlaySliderFeedback()
+    {
+        float now = Time.unscaledTime;
+        if (now < lastSliderFeedbackTime) { nextSliderFeedbackTime = 0f; }
+        lastSliderFeedbackTime = now;
+        if (now < nextSliderFeedbackTime) { return; }
+        nextSliderFeedbackTime = now + 0.12f;
+        audioManager.PlayUiSelect();
     }
 
     private void RefreshBlizzardReference()

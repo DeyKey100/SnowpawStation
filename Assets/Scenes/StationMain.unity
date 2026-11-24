@@ -670,6 +670,7 @@ GameObject:
   - component: {fileID: 420484901}
   - component: {fileID: 420484902}
   - component: {fileID: 420484903}
+  - component: {fileID: 420484904}
   m_Layer: 0
   m_Name: GameSystems
   m_TagString: Untagged
@@ -746,6 +747,30 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46994032883bb1e479f3b58ed355a9b9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &420484904
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 420484898}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bcd4effb9c29c4645b36a408fc5d286e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playlistFolder: Assets/Game/Audio/Music
+  playlistClips: []
+  shufflePlaylist: 1
+  playOnStart: 1
+  fadeSeconds: 1.2
+  defaultMusicVolume: 0.15
+  defaultSfxVolume: 0.6
+  musicEnabledByDefault: 1
+  musicGain: 0.3
+  sfxPoolSize: 24
+  musicOutput: {fileID: 0}
+  sfxOutput: {fileID: 0}
 --- !u!1 &503559189 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: f16963b40be234d41a7b50d12ad6b249, type: 3}
@@ -967,8 +992,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.9217813, y: 0.6979766, z: 1.1098077}
-  m_Center: {x: -11.762715, y: 0.21389711, z: -19.301426}
+  m_Size: {x: 1.1080291, y: 0.6979766, z: 1.4721524}
+  m_Center: {x: -11.669592, y: 0.21389711, z: -19.120255}
 --- !u!4 &558208273
 Transform:
   m_ObjectHideFlags: 0
@@ -978,7 +1003,7 @@ Transform:
   m_GameObject: {fileID: 558208268}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -6.7279997, y: 0.5, z: -13.256999}
+  m_LocalPosition: {x: -5.83, y: 0.5, z: -13.35}
   m_LocalScale: {x: 1, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1685,7 +1710,6 @@ GameObject:
   - component: {fileID: 1418047645}
   - component: {fileID: 1418047646}
   - component: {fileID: 1418047647}
-  - component: {fileID: 1418047648}
   m_Layer: 0
   m_Name: StationHUD
   m_TagString: Untagged
@@ -1735,24 +1759,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 330d8e18224658b47b55cdde2c29fd71, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  musicPlayer: {fileID: 1418047648}
+  musicPlayer: {fileID: 0}
   blizzardManager: {fileID: 0}
   panelWidth: 420
---- !u!114 &1418047648
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1418047644}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6f5b8f32d0cab8b4089606326e923de6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  musicClip: {fileID: 8300000, guid: a8bcd53948556354eae657bcb6c39849, type: 3}
-  defaultVolume: 0.1
-  musicEnabledByDefault: 1
 --- !u!1001 &1544851956
 PrefabInstance:
   m_ObjectHideFlags: 0
