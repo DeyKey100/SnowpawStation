@@ -11,7 +11,13 @@ using UnityEngine;
 public class VisitorCarGreeting : MonoBehaviour
 {
     private const string PlayerTag = "Player";
-    private const float DefaultDistance = 4.5f;
+
+    /// <summary>
+    /// Насколько близко нужно подойти к борту машины. Меряется от габаритов корпуса,
+    /// а не от пивота, поэтому 2.6 м — это уже «стою у машины», а не «прохожу мимо».
+    /// </summary>
+    private const float DefaultDistance = 2.6f;
+
     private const float VerticalLimit = 3f;
 
     private Action onApproach;

@@ -66,8 +66,21 @@ public sealed class ServiceDirector : MonoBehaviour
     private const float MinArrivalDelay = 2.5f;
     private const float MaxArrivalDelay = 5.5f;
 
+    /// <summary>
+    /// Сколько мест под навесом занимают машины. Колонок в сцене четыре, и каждая
+    /// даёт своё место парковки, поэтому заказы идут по кругу 0..3, а не по двум.
+    /// </summary>
+    private const int PumpSlotCount = 4;
+
     /// <summary>Товар, взятый с полки (в «лапах» до подтверждения на стойке).</summary>
     public string CarriedGood { get; private set; }
+
+    /// <summary>
+    /// Заказ, посетитель которого уже поздоровался. Приветствие показывается один
+    /// раз за заказ: выход из магазина и возвращение во двор не должны повторять
+    /// реплику — машина всё ещё стоит, но знакомство уже состоялось.
+    /// </summary>
+    private string greetingShownFor;
 
     /// <summary>
     /// Товар уже выдан на кассе, но заказ ещё не закрыт (идёт реплика клиента).
@@ -172,6 +185,7 @@ public sealed class ServiceDirector : MonoBehaviour
             CurrentStage = OrderStage.None;
             CarriedGood = null;
             ItemDelivered = false;
+            greetingShownFor = null;
             if (arrivalRoutine != null)
             {
                 StopCoroutine(arrivalRoutine);
@@ -233,7 +247,16 @@ public sealed class ServiceDirector : MonoBehaviour
 
     private Order CarOrder(RegularCarDef car, int index)
     {
-        return new Order { id = "car_" + index, displayName = car.displayName, liters = car.liters, isGuest = false, pumpIndex = index % 2 };
+        // Колонки идут по кругу: под навесом четыре места, и машины не должны
+        // вставать в одни и те же две точки — двор выглядит живым.
+        return new Order
+        {
+            id = "car_" + index,
+            displayName = car.displayName,
+            liters = car.liters,
+            isGuest = false,
+            pumpIndex = index % PumpSlotCount,
+        };
     }
 
     private Order GuestOrder(GuestDef guest)
@@ -245,6 +268,8 @@ public sealed class ServiceDirector : MonoBehaviour
     {
         CarriedGood = null;
         ItemDelivered = false;
+        // Новый посетитель — новый разговор.
+        greetingShownFor = null;
         CurrentOrder = queue.Count > 0 ? queue[0] : null;
         CurrentStage = CurrentOrder != null ? OrderStage.Arriving : OrderStage.None;
 
@@ -333,10 +358,14 @@ public sealed class ServiceDirector : MonoBehaviour
     /// <summary>
     /// Вешает на стоящую машину ожидание подхода игрока. Повторный вызов на уже
     /// стоящую машину безопасен: компонент один, колбэк перезаписывается.
+    ///
+    /// Если посетитель этого заказа уже поздоровался, второй раз не взводим: игрок
+    /// может зайти в магазин и вернуться, а заказ всё ещё будет в Refueling — без
+    /// этой проверки приветствие повторялось на каждом возвращении во двор.
     /// </summary>
     private void ArmGreeting(Order order)
     {
-        if (order == null || dialogue == null)
+        if (order == null || dialogue == null || greetingShownFor == order.id)
         {
             return;
         }
@@ -355,6 +384,9 @@ public sealed class ServiceDirector : MonoBehaviour
                 return;
             }
 
+            // Реплика одноразовая: отметку ставим до показа, чтобы повторный заход
+            // в магазин посреди того же заказа уже не здоровался заново.
+            greetingShownFor = order.id;
             ShowGreeting(order);
         });
     }

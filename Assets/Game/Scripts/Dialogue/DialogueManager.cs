@@ -8,8 +8,8 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// Диалоговый движок нулевой версии: имя говорящего, очередь реплик, варианты ответа,
 /// условия показа (DialogueConditions), действия (DialogueActions), корректное завершение.
-/// На время диалога блокирует обычное взаимодействие (InteractionLock) — но не камеру:
-/// на Котова можно смотреть/отворачиваться во время визита.
+/// На время диалога блокирует обычное взаимодействие (InteractionLock) и ходьбу
+/// (PlayerControlLock.AddMoveOnly), но не камеру: на Котова можно смотреть/отворачиваться.
 /// Внешний вид — через общую тему UiTheme.
 ///
 /// Клавиша E у диалога в приоритете: Update выполняется раньше мира (Execution Order
@@ -22,6 +22,9 @@ public sealed class DialogueManager : MonoBehaviour
 {
     private const float TextSpeed = 60f; // символов в секунду
     private const string AnswerPlate = "ВАШ ОТВЕТ";
+
+    /// <summary>Идентификатор замка движения на время диалога.</summary>
+    private const string DialogueLockId = "dialogue_move";
 
     public static DialogueManager Instance { get; private set; }
     public static bool IsActive => Instance != null && Instance.script != null;
@@ -113,6 +116,9 @@ public sealed class DialogueManager : MonoBehaviour
         // Нажатие E, открывшее диалог, не должно в тот же кадр «допечатать» первую реплику.
         inputBlockedFrame = Time.frameCount;
         InteractionLock.Add("dialogue");
+        // Ходить во время разговора нельзя: игрок не должен уйти от собеседника
+        // посреди реплики. Камеру намеренно не замораживаем — оглянуться можно.
+        PlayerControlLock.AddMoveOnly(DialogueLockId);
         DialogueStarted?.Invoke(script);
     }
 
@@ -301,6 +307,7 @@ public sealed class DialogueManager : MonoBehaviour
         pendingFinishId = null;
         queue.Clear();
         InteractionLock.Remove("dialogue");
+        PlayerControlLock.RemoveMoveOnly(DialogueLockId);
     }
 
     private void Finish()
@@ -336,7 +343,17 @@ public sealed class DialogueManager : MonoBehaviour
     private System.Collections.IEnumerator RemoveLockNextFrame()
     {
         yield return null; // Ждем 1 кадр, пока "сгорит" нажатие E
+
+        // К этому кадру из очереди мог уже начаться следующий диалог (Finish ->
+        // Begin в том же кадре). Замки принадлежат активному диалогу, поэтому
+        // снимаем их только если на экране по-прежнему ничего нет.
+        if (script != null)
+        {
+            yield break;
+        }
+
         InteractionLock.Remove("dialogue");
+        PlayerControlLock.RemoveMoveOnly(DialogueLockId);
     }
 
     // ───────────────────────── Отрисовка ─────────────────────────
