@@ -21,23 +21,13 @@ public class BedInteractable : MonoBehaviour, IInteractable
 
     private bool sleeping;
     private float fadeAlpha;
-    private Texture2D blackTexture;
-
-    private void Awake()
-    {
-        blackTexture = MakeSolidTexture(Color.black);
-    }
-
-    private void OnDestroy()
-    {
-        if (blackTexture != null)
-        {
-            Destroy(blackTexture);
-        }
-    }
+    private float sleepStartedAt;
+    private GUIStyle sleepCaptionStyle;
+    private readonly GUIContent sleepCaption = new GUIContent("zzz...");
 
     private void OnDisable()
     {
+        StopAllCoroutines();
         if (sleeping)
         {
             sleeping = false;
@@ -54,7 +44,7 @@ public class BedInteractable : MonoBehaviour, IInteractable
 
     public void Interact()
     {
-        if (sleeping)
+        if (sleeping || !isActiveAndEnabled)
         {
             return;
         }
@@ -97,6 +87,7 @@ public class BedInteractable : MonoBehaviour, IInteractable
     private IEnumerator SleepRoutine()
     {
         sleeping = true;
+        sleepStartedAt = Time.time;
         InteractionLock.Add("sleeping");
         PlayerControlLock.Add("sleeping");
 
@@ -134,6 +125,15 @@ public class BedInteractable : MonoBehaviour, IInteractable
             DayLoopManager.Instance.NotifyNightCompleted();
         }
 
+        if (!sleeping || !isActiveAndEnabled)
+        {
+            yield break;
+        }
+
+        // BeginDay сбрасывает замки — держим управление до конца заставки.
+        InteractionLock.Add("sleeping");
+        PlayerControlLock.Add("sleeping");
+
         yield return new WaitForSeconds(0.4f);
 
         // Просветление экрана
@@ -154,28 +154,55 @@ public class BedInteractable : MonoBehaviour, IInteractable
 
     private void OnGUI()
     {
-        if (fadeAlpha <= 0f)
+        if (fadeAlpha <= 0f || Event.current.type != EventType.Repaint)
         {
             return;
         }
 
-        if (blackTexture == null)
+        Color previousColor = GUI.color;
+        int previousDepth = GUI.depth;
+        try
         {
-            blackTexture = MakeSolidTexture(Color.black);
-        }
+            // Закрываем HUD, но оставляем меню паузы и загрузку поверх заставки.
+            GUI.depth = PauseMenu.IsPaused || SceneLoadingScreen.IsLoading ? 1 : -50;
+            GUI.color = Color.white;
 
-        Color prevColor = GUI.color;
-        GUI.color = new Color(0f, 0f, 0f, fadeAlpha);
-        GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), blackTexture);
-        GUI.color = prevColor;
+            Color background = UiTheme.Night;
+            background.a = fadeAlpha;
+            UiTheme.Fill(new Rect(0f, 0f, Screen.width, Screen.height), background);
+
+            if (sleeping)
+            {
+                DrawSleepCaption();
+            }
+        }
+        finally
+        {
+            GUI.color = previousColor;
+            GUI.depth = previousDepth;
+        }
     }
 
-    private static Texture2D MakeSolidTexture(Color color)
+    private void DrawSleepCaption()
     {
-        Texture2D texture = new Texture2D(1, 1, TextureFormat.RGBA32, false);
-        texture.SetPixel(0, 0, color);
-        texture.Apply();
-        return texture;
+        float alpha = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1f, fadeAlpha));
+        if (alpha <= 0f)
+        {
+            return;
+        }
+
+        if (sleepCaptionStyle == null)
+        {
+            sleepCaptionStyle = UiTheme.Label(38f, UiTheme.Ice, FontStyle.Bold, TextAnchor.MiddleCenter);
+        }
+
+        float scale = UiTheme.Scale;
+        sleepCaptionStyle.fontSize = Mathf.RoundToInt(38f * scale);
+        float bob = Mathf.Round(Mathf.Sin((Time.time - sleepStartedAt) * 2.5f) * 6f * scale);
+        float height = 56f * scale;
+        Rect rect = new Rect(0f, Screen.height * 0.5f - height * 0.5f + bob, Screen.width, height);
+        GUI.color = new Color(1f, 1f, 1f, alpha);
+        GUI.Label(rect, sleepCaption, sleepCaptionStyle);
     }
 
     private static bool HasShiftLogNote(string note)

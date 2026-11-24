@@ -60,6 +60,7 @@
   <Project Path="Unity.VisualScripting.State.csproj" />
   <Project Path="Unity.AI.Navigation.Updater.csproj" />
   <Project Path="UnityEditor.UI.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Unity.PlasticSCM.Editor.Assistant.csproj" />
   <Project Path="Unity.AI.Navigation.Editor.csproj" />
   <Project Path="Unity.AppUI.MVVM.csproj" />
@@ -84,10 +85,10 @@
   <Project Path="Unity.VisualScripting.Shared.Editor.csproj" />
   <Project Path="Unity.AppUI.Undo.csproj" />
   <Project Path="com.IvanMurzak.Unity.MCP.TestFiles.csproj" />
+  <Project Path="com.IvanMurzak.Unity.MCP.Navigation.Editor.csproj" />
   <Project Path="Unity.InputSystem.ForUI.Editor.csproj" />
   <Project Path="Unity.CollabProxy.Editor.csproj" />
   <Project Path="Unity.RenderPipeline.Universal.ShaderLibrary.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="HeyHeyThere.PSXGasStationKitFree.csproj" />
   <Project Path="com.IvanMurzak.Unity.MCP.Editor.Rql.Lighting.csproj" />
   <Project Path="Unity.Cloud.AppLinking.Editor.Embedded.csproj" />

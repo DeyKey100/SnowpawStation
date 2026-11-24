@@ -49,7 +49,7 @@ public class ProximityInteractable : MonoBehaviour
         string sound = target is WoodPileInteractable || target is StoveInteractable
             ? "WAV/Fireside/log_drop_01.wav"
             : target is SnowPileInteractable ? "WAV/Snow Play/snowball_hit_soft_01.wav"
-            : target is ShopCoffeeCupInteractable ? "WAV/Fireside/mug_clink_01.wav"
+            : target is ShopGoodItem shopGood && shopGood.GoodId == "coffee" ? "WAV/Fireside/mug_clink_01.wav"
             : target is DoorInteractable ? "WAV/Weather/door_open_wind_01.wav"
             : "WAV/Winter UI/ui_select_01.wav";
         emitter.ConfigureFallback(sound);

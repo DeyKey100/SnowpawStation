@@ -7,8 +7,8 @@ using UnityEngine;
 ///
 /// Полки — готовые стеллажи модели, переименованные в сцене в shelf1 и shelf2.
 /// Ничего достраивать не нужно: у каждого есть столешница, на неё товар и ставим.
-/// Заглушки — примитивы разного цвета и размера, чтобы на полке не стояли шесть
-/// одинаковых кубов.
+/// Готовые визуалы загружаются из Resources/ShopGoods; если их нет, остаются
+/// примитивы разного цвета и размера. Авторские модели и материалы сохраняются.
 /// </summary>
 public static class ShopGoods
 {
@@ -42,42 +42,46 @@ public static class ShopGoods
     /// <summary>Высота столешницы, если луч почему-то не попал в сам стеллаж.</summary>
     private const float FallbackTopY = 1.251f;
 
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
+    private static readonly int SmoothnessId = Shader.PropertyToID("_Smoothness");
+
     public static readonly Display[] All =
     {
         new Display
         {
             GoodId = "coffee", ObjectName = "ShopGood_Coffee", ShelfName = "shelf1", Spread = 0f,
-            Shape = PrimitiveType.Cylinder, Size = new Vector3(0.11f, 0.07f, 0.11f),
+            Shape = PrimitiveType.Cylinder, Size = new Vector3(0.12f, 0.07f, 0.12f),
             Color = new Color(0.88f, 0.84f, 0.76f), ReuseName = "ShopCoffeeCup",
         },
         new Display
         {
             GoodId = "tea", ObjectName = "ShopGood_Tea", ShelfName = "shelf1", Spread = 0.5f,
-            Shape = PrimitiveType.Cube, Size = new Vector3(0.17f, 0.24f, 0.12f),
+            Shape = PrimitiveType.Cube, Size = new Vector3(0.15f, 0.22f, 0.10f),
             Color = new Color(0.25f, 0.42f, 0.28f),
         },
         new Display
         {
             GoodId = "cookies", ObjectName = "ShopGood_Cookies", ShelfName = "shelf1", Spread = 1f,
-            Shape = PrimitiveType.Cube, Size = new Vector3(0.26f, 0.16f, 0.18f),
+            Shape = PrimitiveType.Cube, Size = new Vector3(0.26f, 0.12f, 0.15f),
             Color = new Color(0.78f, 0.62f, 0.35f),
         },
         new Display
         {
             GoodId = "cigarettes", ObjectName = "ShopGood_Cigarettes", ShelfName = "shelf2", Spread = 0f,
-            Shape = PrimitiveType.Cube, Size = new Vector3(0.16f, 0.09f, 0.11f),
+            Shape = PrimitiveType.Cube, Size = new Vector3(0.09f, 0.16f, 0.035f),
             Color = new Color(0.92f, 0.93f, 0.95f),
         },
         new Display
         {
             GoodId = "canister", ObjectName = "ShopGood_Canister", ShelfName = "shelf2", Spread = 0.5f,
-            Shape = PrimitiveType.Cube, Size = new Vector3(0.19f, 0.34f, 0.14f),
+            Shape = PrimitiveType.Cube, Size = new Vector3(0.22f, 0.34f, 0.14f),
             Color = new Color(0.62f, 0.14f, 0.10f),
         },
         new Display
         {
             GoodId = "heater", ObjectName = "ShopGood_Heater", ShelfName = "shelf2", Spread = 1f,
-            Shape = PrimitiveType.Cylinder, Size = new Vector3(0.22f, 0.15f, 0.22f),
+            Shape = PrimitiveType.Cylinder, Size = new Vector3(0.25f, 0.15f, 0.18f),
             Color = new Color(0.85f, 0.45f, 0.12f),
         },
     };
@@ -97,7 +101,8 @@ public static class ShopGoods
         }
 
         GameObject item = FindExisting(display);
-        if (item == null)
+        bool created = item == null;
+        if (created)
         {
             item = GameObject.CreatePrimitive(display.Shape);
         }
@@ -106,38 +111,69 @@ public static class ShopGoods
         // переиспользуется как обычный товар и должен называться так же.
         item.name = display.ObjectName;
 
-        // Товар — декорация: коллайдер мешал бы пройти мимо стеллажа и ловил лучи.
-        DropCollider(item);
-
-        Bounds bounds = shelf.bounds;
-        float x = Mathf.Lerp(bounds.min.x + SideInset, bounds.max.x - SideInset, display.Spread);
-        float z = bounds.max.z - FrontInset;
-        float top = MeasureTop(shelf, bounds, x, z);
-
-        item.transform.SetParent(shelf.transform, true);
-        // top — плоскость столешницы, а позиция объекта — его центр.
-        // У цилиндра Unity высота 2, поэтому половина высоты равна Size.y,
-        // у куба — Size.y * 0.5. Без поправки товар тонул бы в столешнице.
-        item.transform.SetPositionAndRotation(
-            new Vector3(x, top + HalfHeight(display), z), Quaternion.identity);
-        item.transform.localScale = display.Size;
-
-        Renderer renderer = item.GetComponent<Renderer>();
-        if (renderer != null && renderer.sharedMaterial != null)
+        bool managedVisual = ShopGoodVisuals.CanManage(item, display.GoodId, created);
+        bool appliedVisual = ShopGoodVisuals.TryApply(item, display.GoodId, created);
+        if (managedVisual)
         {
-            Material material = new Material(renderer.sharedMaterial);
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", display.Color);
-            }
+            // Наш товар — декорация; авторский коллайдер и transform не трогаем.
+            DropCollider(item);
 
-            if (material.HasProperty("_Color"))
-            {
-                material.SetColor("_Color", display.Color);
-            }
+            Bounds bounds = shelf.bounds;
+            float x = Mathf.Lerp(bounds.min.x + SideInset, bounds.max.x - SideInset, display.Spread);
+            float z = bounds.max.z - FrontInset;
+            float top = MeasureTop(shelf, bounds, x, z);
 
-            material.SetFloat("_Smoothness", 0.15f);
-            renderer.sharedMaterial = material;
+            item.transform.SetParent(shelf.transform, true);
+            // Resource-меши имеют ту же высоту, что fallback: coffee/heater [-1, 1],
+            // остальные [-0.5, 0.5]. Поэтому HalfHeight корректен для обеих версий.
+            item.transform.SetPositionAndRotation(
+                new Vector3(x, top + HalfHeight(display), z), Quaternion.identity);
+            item.transform.localScale = display.Size;
+        }
+
+        if (!appliedVisual && item.TryGetComponent(out Renderer renderer))
+        {
+            Material source = renderer.sharedMaterial;
+            bool broken = source == null || source.shader == null ||
+                          source.shader.name == "Hidden/InternalErrorShader";
+            // Корректный материал сцены сохраняем вместе с текстурой и её цветами.
+            // Копия сломанного материала сохраняла ErrorShader даже после перекраски.
+            if (created || broken)
+            {
+                Shader shader = broken
+                    ? Shader.Find("Snowpaw/PSX Lit Vertex Snap")
+                    : source.shader;
+                if (shader == null)
+                {
+                    shader = Shader.Find("Universal Render Pipeline/Lit");
+                }
+
+                if (shader != null)
+                {
+                    Material material = broken ? new Material(shader) : new Material(source);
+                    material.name = display.ObjectName + "_Display";
+                    if (material.HasProperty(BaseColorId))
+                    {
+                        material.SetColor(BaseColorId, display.Color);
+                    }
+
+                    if (material.HasProperty(ColorId))
+                    {
+                        material.SetColor(ColorId, display.Color);
+                    }
+
+                    if (material.HasProperty(SmoothnessId))
+                    {
+                        material.SetFloat(SmoothnessId, 0.15f);
+                    }
+
+                    renderer.sharedMaterial = material;
+                }
+                else
+                {
+                    Debug.LogError($"[Snowpaw Station] Нет рабочего шейдера для {display.ObjectName}.", item);
+                }
+            }
         }
 
         return ShopGoodItem.Attach(item, display.GoodId);
