@@ -326,13 +326,14 @@ public sealed class StationHud : MonoBehaviour
         {
             ServiceDirector service = ServiceDirector.Instance;
             string clock = service != null ? service.Clock : "09:00";
-            storyTitle = $"{clock} · машин: {dayLoopManager.CarsServed}/{dayLoopManager.RegularCarQuota}";
+            storyTitle = $"{clock} · посетителей: {dayLoopManager.CarsServed}/{dayLoopManager.RegularCarQuota}";
 
             if (service != null && service.CurrentOrder != null)
             {
                 var order = service.CurrentOrder;
                 string item = string.IsNullOrEmpty(order.item) ? "" : $" + {Goods.DisplayName(order.item)}";
-                storyRows.Add($"Заказ: {order.displayName} — {order.liters:0} л{item}");
+                string who = order.isGuest ? order.displayName : "посетитель";
+                storyRows.Add($"Заказ: {who} — {order.liters:0} л{item}");
                 storyMarks.Add(MarkNone);
             }
         }

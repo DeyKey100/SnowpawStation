@@ -279,10 +279,14 @@ public static class StoryDialogues
 
     // ================= ОБЫЧНЫЕ МАШИНЫ =================
 
-    public static DialogueScript RegularCarGreeting(string carName, float liters)
+    /// <summary>
+    /// Приветствие обычного посетителя. Модель машины теперь случайная, поэтому
+    /// в реплике нет названия кузова — только «посетитель» и объём.
+    /// </summary>
+    public static DialogueScript RegularCarGreeting(float liters)
     {
-        DialogueScript s = DialogueBuilder.Create("regular_greeting", $"[{carName} у колонки]");
-        s.Say(carName.ToUpperInvariant(), $"«{liters:0} литров, пожалуйста».");
+        DialogueScript s = DialogueBuilder.Create("regular_greeting", "[Посетитель у колонки]");
+        s.Say("ПОСЕТИТЕЛЬ", $"«{liters:0} литров, пожалуйста».");
         return s;
     }
 

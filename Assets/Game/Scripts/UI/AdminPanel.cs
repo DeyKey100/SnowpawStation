@@ -249,15 +249,16 @@ public sealed class AdminPanel : MonoBehaviour
         return pressed;
     }
 
-    /// <summary>Следующая ступень разрешения кадра по кругу.</summary>
+    /// <summary>Следующая ступень разрешения кадра по кругу: от самого грубого к 240.</summary>
     private static int NextPsxHeight(int current)
     {
         switch (current)
         {
+            case 96: return 120;
+            case 120: return 144;
+            case 144: return 180;
             case 180: return 240;
-            case 240: return 320;
-            case 320: return 360;
-            default: return 180;
+            default: return 96;
         }
     }
 

@@ -41,12 +41,16 @@ public sealed class ServiceDirector : MonoBehaviour
     /// </summary>
     public int OrderPumpNumber => CanRefuel && CurrentOrder != null ? CurrentOrder.pumpIndex + 1 : 0;
 
-    /// <summary>Заказ ещё можно заправлять: машина у колонки и топливо по нему не выдано.</summary>
+    /// <summary>
+    /// Заказ ещё можно заправлять: машина у колонки и топливо по нему не выдано.
+    /// Открытый диалог здесь не проверяется намеренно: пока он идёт, весь мир
+    /// заперт InteractionLock, поэтому к колонке всё равно не подойти. Зато плашка
+    /// «[E] Заправить» не мигает и не пропадает, когда посетитель заговорил с игроком.
+    /// </summary>
     public bool CanRefuel =>
         CurrentStage == OrderStage.Refueling &&
         truckArrival != null &&
-        truckArrival.IsParked &&
-        !DialogueManager.IsActive;
+        truckArrival.IsParked;
       
     /// <summary>Часы: каждая обслуженная машина сдвигает время, таймера нет.</summary>
     public string Clock => CurrentState == "morning" ? "08:00" : CurrentState == "evening" ? "18:00" : clockText;
@@ -62,8 +66,21 @@ public sealed class ServiceDirector : MonoBehaviour
     private const float MinArrivalDelay = 2.5f;
     private const float MaxArrivalDelay = 5.5f;
 
+    /// <summary>
+    /// Сколько мест под навесом занимают машины. Колонок в сцене четыре, и каждая
+    /// даёт своё место парковки, поэтому заказы идут по кругу 0..3, а не по двум.
+    /// </summary>
+    private const int PumpSlotCount = 4;
+
     /// <summary>Товар, взятый с полки (в «лапах» до подтверждения на стойке).</summary>
     public string CarriedGood { get; private set; }
+
+    /// <summary>
+    /// Заказ, посетитель которого уже поздоровался. Приветствие показывается один
+    /// раз за заказ: выход из магазина и возвращение во двор не должны повторять
+    /// реплику — машина всё ещё стоит, но знакомство уже состоялось.
+    /// </summary>
+    private string greetingShownFor;
 
     /// <summary>
     /// Товар уже выдан на кассе, но заказ ещё не закрыт (идёт реплика клиента).
@@ -140,9 +157,13 @@ public sealed class ServiceDirector : MonoBehaviour
         if (CurrentStage == OrderStage.Refueling || CurrentStage == OrderStage.AwaitingItem)
         {
             Transform pump = FindPump(CurrentOrder.pumpIndex);
-            if (pump != null)
+            if (pump != null && truckArrival.SpawnParked(pump))
             {
-                truckArrival.SpawnParked(pump);
+                // Вернулись из магазина — приветствие снова ждёт подхода игрока.
+                if (CurrentStage == OrderStage.Refueling)
+                {
+                    ArmGreeting(CurrentOrder);
+                }
             }
         }
     }
@@ -164,6 +185,7 @@ public sealed class ServiceDirector : MonoBehaviour
             CurrentStage = OrderStage.None;
             CarriedGood = null;
             ItemDelivered = false;
+            greetingShownFor = null;
             if (arrivalRoutine != null)
             {
                 StopCoroutine(arrivalRoutine);
@@ -225,7 +247,16 @@ public sealed class ServiceDirector : MonoBehaviour
 
     private Order CarOrder(RegularCarDef car, int index)
     {
-        return new Order { id = "car_" + index, displayName = car.displayName, liters = car.liters, isGuest = false, pumpIndex = index % 2 };
+        // Колонки идут по кругу: под навесом четыре места, и машины не должны
+        // вставать в одни и те же две точки — двор выглядит живым.
+        return new Order
+        {
+            id = "car_" + index,
+            displayName = car.displayName,
+            liters = car.liters,
+            isGuest = false,
+            pumpIndex = index % PumpSlotCount,
+        };
     }
 
     private Order GuestOrder(GuestDef guest)
@@ -237,6 +268,8 @@ public sealed class ServiceDirector : MonoBehaviour
     {
         CarriedGood = null;
         ItemDelivered = false;
+        // Новый посетитель — новый разговор.
+        greetingShownFor = null;
         CurrentOrder = queue.Count > 0 ? queue[0] : null;
         CurrentStage = CurrentOrder != null ? OrderStage.Arriving : OrderStage.None;
 
@@ -291,22 +324,71 @@ public sealed class ServiceDirector : MonoBehaviour
         Transform pump = FindPump(order.pumpIndex);
         if (pump == null)
         {
-            Debug.LogError($"[Snowpaw Station] Не найдена колонка №{order.pumpIndex + 1} для подъезда трака.");
+            Debug.LogError($"[Snowpaw Station] Не найдена колонка №{order.pumpIndex + 1} для подъезда машины.");
             arrivalRoutine = null;
             yield break;
         }
 
         // 3. Запускаем физический подъезд машины (без задержки внутри контроллера).
-        if (!truckArrival.Begin(pump, () =>
+        // Обычный посетитель приезжает на случайной модели из Assets/NpcCars,
+        // сюжетный гость — пока на заглушке: у него будет своя машина.
+        // На площадке могла остаться машина прошлого заказа (игрок ушёл в магазин
+        // посреди смены): без уборки Begin вернёт false, и очередь навсегда
+        // застрянет в Arriving — ровно так и ломался каждый следующий посетитель.
+        if (truckArrival.IsActive)
+        {
+            truckArrival.CancelArrival();
+        }
+
+        string carModel = order.isGuest ? NpcCarModels.PlaceholderPath : NpcCarModels.RandomVisitorPath();
+        if (!truckArrival.Begin(carModel, pump, () =>
         {
             CurrentStage = OrderStage.Refueling;
-            ShowGreeting(order);
+            // Приветствие не выскакивает через весь двор: посетитель заговорит,
+            // когда игрок сам подойдёт к машине.
+            ArmGreeting(order);
         }))
         {
-            Debug.LogWarning($"[Snowpaw Station] Не удалось запустить подъезд трака для заказа '{order.displayName}'.");
+            Debug.LogWarning($"[Snowpaw Station] Не удалось запустить подъезд машины для заказа '{order.displayName}'.");
         }
 
         arrivalRoutine = null;
+    }
+
+    /// <summary>
+    /// Вешает на стоящую машину ожидание подхода игрока. Повторный вызов на уже
+    /// стоящую машину безопасен: компонент один, колбэк перезаписывается.
+    ///
+    /// Если посетитель этого заказа уже поздоровался, второй раз не взводим: игрок
+    /// может зайти в магазин и вернуться, а заказ всё ещё будет в Refueling — без
+    /// этой проверки приветствие повторялось на каждом возвращении во двор.
+    /// </summary>
+    private void ArmGreeting(Order order)
+    {
+        if (order == null || dialogue == null || greetingShownFor == order.id)
+        {
+            return;
+        }
+
+        Transform car = truckArrival != null ? truckArrival.ParkedCar : null;
+        if (car == null)
+        {
+            return;
+        }
+
+        VisitorCarGreeting.Attach(car, delegate
+        {
+            // Пока игрок шёл, заказ мог закончиться (смена, сброс) — тогда молчим.
+            if (CurrentOrder == null || CurrentOrder.id != order.id || CurrentStage != OrderStage.Refueling)
+            {
+                return;
+            }
+
+            // Реплика одноразовая: отметку ставим до показа, чтобы повторный заход
+            // в магазин посреди того же заказа уже не здоровался заново.
+            greetingShownFor = order.id;
+            ShowGreeting(order);
+        });
     }
 
     private void ShowGreeting(Order order)
@@ -322,7 +404,7 @@ public sealed class ServiceDirector : MonoBehaviour
             case "courier": dialogue.Show(StoryDialogues.CourierGreeting()); break;
             case "danila": dialogue.Show(StoryDialogues.DanilaGreeting()); break;
             case "red_pickup": dialogue.Show(StoryDialogues.PickupArrival()); break;
-            default: dialogue.Show(StoryDialogues.RegularCarGreeting(order.displayName, order.liters)); break;
+            default: dialogue.Show(StoryDialogues.RegularCarGreeting(order.liters)); break;
         }
     }
 
@@ -399,11 +481,17 @@ public sealed class ServiceDirector : MonoBehaviour
 
     // ================= МАГАЗИН =================
 
-    /// <summary>Взять товар с полки. Один товар за раз.</summary>
+    /// <summary>Взять товар с полки. Один товар за раз, и только тот, что просят.</summary>
     public bool TakeGood(string goodId)
     {
         if (CurrentOrder == null || CurrentStage != OrderStage.AwaitingItem || ItemDelivered || !string.IsNullOrEmpty(CarriedGood))
         {
+            return false;
+        }
+
+        if (CurrentOrder.item != goodId)
+        {
+            // Взять с полки что попало нельзя: клиент ждёт конкретный товар.
             return false;
         }
 
@@ -499,16 +587,24 @@ public sealed class ServiceDirector : MonoBehaviour
             queue.RemoveAt(0);
         }
 
-        if (done.isGuest)
+        // DayLoopManager живёт только во дворе станции. Заказ же закрывают в магазине —
+        // на кассе, где его нет. Без этой проверки подсчёт посетителей падал
+        // с NullReferenceException и очередь заказов обрывалась навсегда.
+        DayLoopManager loop = DayLoopManager.Instance;
+        if (loop != null)
         {
-            DayLoopManager.Instance.NotifyGuestServed(done.id);
-        }
-        else
-        {
-            DayLoopManager.Instance.NotifyRegularCarServed();
+            if (done.isGuest)
+            {
+                loop.NotifyGuestServed(done.id);
+            }
+            else
+            {
+                loop.NotifyRegularCarServed();
+            }
         }
 
-        if (DayLoopManager.Instance.CurrentState == DayLoopManager.DayState.WorkShift)
+        bool shiftIsOn = loop == null || loop.CurrentState == DayLoopManager.DayState.WorkShift;
+        if (shiftIsOn)
         {
             if (truckArrival != null && truckArrival.IsActive)
             {
@@ -703,82 +799,39 @@ public sealed class ServiceDirector : MonoBehaviour
             return;
         }
 
-        Renderer shelf = InteriorShopAnchors.FindMesh(InteriorShopAnchors.GoodsShelfMesh);
         Renderer counter = InteriorShopAnchors.FindMesh(InteriorShopAnchors.CashDeskMesh);
-        if (shelf == null || counter == null)
+        if (counter == null)
         {
             Debug.LogWarning(
-                "[Snowpaw Station] Модель магазина не найдена: полка и стойка с кассой не подключены.");
+                "[Snowpaw Station] Модель магазина не найдена: стойка с кассой не подключена.");
             return;
         }
 
-        AttachShopMarker(shelf.gameObject, shelf.gameObject.AddComponent<ShopShelfInteractable>());
+        // На стеллажах стоит по товару-заглушке, каждый сам решает, показывать ли
+        // подсказку (см. ShopGoodItem); на кассе — один общий маркер.
         AttachShopMarker(counter.gameObject, counter.gameObject.AddComponent<ShopCounterInteractable>());
-        EnsureCoffeeCup();
-
-        runtimeShop.Add(shelf.gameObject);
+        EnsureShopGoods();
         runtimeShop.Add(counter.gameObject);
-        Debug.Log("[Snowpaw Station] Магазин подключён к модели интерьера: полка + стойка с кассой.");
+        Debug.Log("[Snowpaw Station] Магазин подключён к модели интерьера: полки + стойка с кассой.");
     }
 
     /// <summary>
-    /// Стакан кофе на стойке Mesh_124. Компонент — на самом примитиве в сцене,
-    /// поэтому здесь только гарантируем, что он есть и стоит на стойке: сцена
-    /// могла быть загружена из старой версии, где стакана ещё не было.
+    /// Товары-заглушки на стеллажах shelf1 и shelf2. Стоят там всегда, независимо
+    /// от заказа: ассортимент должен быть виден сразу, а не появляться из воздуха.
+    /// Взять конкретный товар можно только под заказ — это решает ShopGoodItem.
     /// </summary>
-    private void EnsureCoffeeCup()
+    private void EnsureShopGoods()
     {
-        ShopCoffeeCupInteractable cup = FindCoffeeCup();
-        if (cup != null)
+        int made = 0;
+        for (int i = 0; i < ShopGoods.All.Length; i++)
         {
-            return;
-        }
-
-        Renderer counterCup = InteriorShopAnchors.FindMesh(InteriorShopAnchors.CoffeeCounterMesh);
-        if (counterCup == null)
-        {
-            Debug.LogWarning(
-                "[Snowpaw Station] Стойка Mesh_124 не найдена: стакан кофе не создан.");
-            return;
-        }
-
-        GameObject cupObject = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        cupObject.name = ShopCoffeeCupInteractable.ObjectName;
-        cupObject.transform.SetParent(counterCup.transform, false);
-        cupObject.transform.localScale = new Vector3(
-            ShopCoffeeCupInteractable.CupDiameter,
-            ShopCoffeeCupInteractable.CupHeight * 0.5f,
-            ShopCoffeeCupInteractable.CupDiameter);
-
-        Renderer cupRenderer = cupObject.GetComponent<Renderer>();
-        if (cupRenderer != null && counterCup.sharedMaterial != null)
-        {
-            // Свой материал-клон: перекрашивать общий материал модели нельзя,
-            // иначе вместе со стаканом поменяет цвет весь магазин.
-            Material material = new Material(counterCup.sharedMaterial);
-            if (material.HasProperty("_BaseColor"))
+            if (ShopGoods.EnsureOne(ShopGoods.All[i]) != null)
             {
-                material.SetColor("_BaseColor", ShopCoffeeCupInteractable.CupColor);
+                made++;
             }
-
-            if (material.HasProperty("_Color"))
-            {
-                material.SetColor("_Color", ShopCoffeeCupInteractable.CupColor);
-            }
-
-            cupRenderer.sharedMaterial = material;
         }
 
-        cupObject.AddComponent<ShopCoffeeCupInteractable>();
-        Debug.Log("[Snowpaw Station] Стакан кофе поставлен на стойку Mesh_124.");
-    }
-
-    /// <summary>Стакан в загруженных сценах (включая выключенные объекты).</summary>
-    private static ShopCoffeeCupInteractable FindCoffeeCup()
-    {
-        ShopCoffeeCupInteractable[] cups =
-            Object.FindObjectsByType<ShopCoffeeCupInteractable>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        return cups.Length > 0 ? cups[0] : null;
+        Debug.Log($"[Snowpaw Station] Товары на полках: {made} из {ShopGoods.All.Length}.");
     }
 
     /// <summary>
@@ -796,58 +849,6 @@ public sealed class ServiceDirector : MonoBehaviour
         // Меши модели импортированы статикой: без коллайдера габариты берутся из рендерера,
         // поэтому маркеру этого достаточно.
         ProximityInteractable.EnsureOn(target, 2.2f);
-    }
-}
-
-/// <summary>Полка магазина: E — взять нужный товар (кофе, печенье, сигареты, грелка...).</summary>
-[DisallowMultipleComponent]
-public sealed class ShopShelfInteractable : MonoBehaviour, IInteractable
-{
-    public string GetInteractPrompt()
-    {
-        ServiceDirector service = ServiceDirector.Instance;
-        if (service == null || service.CurrentOrder == null || string.IsNullOrEmpty(service.CurrentOrder.item))
-        {
-            // Заказа с товаром нет — полка молчит, как и колонки без машины.
-            // Иначе подсказка висит на стеллаже всё утро и путает с задачами.
-            return "";
-        }
-
-        // Кофе стоит отдельным стаканом на стойке Mesh_124: с полки его не берут,
-        // иначе игрок тянул бы один и тот же товар из двух мест и путался.
-        if (service.CurrentOrder.item == ShopCoffeeCupInteractable.GoodId)
-        {
-            return !string.IsNullOrEmpty(service.CarriedGood) && !service.ItemDelivered
-                ? $"В лапах: {Goods.DisplayName(service.CarriedGood)} — несите на стойку с кассой"
-                : "";
-        }
-
-        return !string.IsNullOrEmpty(service.CarriedGood)
-            ? $"В лапах: {Goods.DisplayName(service.CarriedGood)} — несите на стойку"
-            : $"[E] Взять {Goods.DisplayName(service.CurrentOrder.item)} с полки";
-    }
-
-    public void Interact()
-    {
-        ServiceDirector service = ServiceDirector.Instance;
-        if (service == null || service.CurrentOrder == null)
-        {
-            return;
-        }
-
-        string need = service.CurrentOrder.item;
-        if (string.IsNullOrEmpty(need) || !string.IsNullOrEmpty(service.CarriedGood) || service.ItemDelivered)
-        {
-            return;
-        }
-
-        // Кофе выдаёт стакан на стойке, а не стеллаж.
-        if (need == ShopCoffeeCupInteractable.GoodId)
-        {
-            return;
-        }
-
-        service.TakeGood(need);
     }
 }
 

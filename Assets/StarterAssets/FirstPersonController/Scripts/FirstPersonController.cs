@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -238,8 +238,9 @@ namespace StarterAssets
 			float targetSpeed = MoveSpeed;
 
 			// Заморозка на время заправки: вход игнорируется, персонаж гасит скорость
-			// и остаётся стоять там, где начал заправку.
-			bool frozen = PlayerControlLock.IsLocked;
+			// и остаётся стоять там, где начал заправку. Диалог сюда же попадает через
+			// IsMoveLocked — идти нельзя, а камерой крутить можно.
+			bool frozen = PlayerControlLock.IsMoveLocked;
 			Vector2 moveInput = frozen ? Vector2.zero : _input.move;
 
 			// a simplistic acceleration and deceleration designed to be easy to remove, replace, or iterate upon

@@ -19,17 +19,14 @@ public static class InteriorShopAnchors
     /// <summary>Кассовый аппарат на прилавке.</summary>
     public const string CashRegisterMesh = "Mesh_137";
 
-    /// <summary>Стеллаж с товаром у задней стены.</summary>
-    public const string GoodsShelfMesh = "Mesh_52";
+    /// <summary>Первый стеллаж с товаром (переименован в сцене из Mesh_108).</summary>
+    public const string Shelf1Name = "shelf1";
+
+    /// <summary>Второй стеллаж с товаром (переименован в сцене из Mesh_124).</summary>
+    public const string Shelf2Name = "shelf2";
 
     /// <summary>Второй (боковой) стеллаж.</summary>
     public const string SideShelfMesh = "Mesh_4";
-
-    /// <summary>Длинная стойка в центре зала.</summary>
-    public const string LongCounterMesh = "Mesh_108";
-
-    /// <summary>Стойка у входа, на неё ставим стакан кофе для Дяди Котлеты.</summary>
-    public const string CoffeeCounterMesh = "Mesh_124";
 
     /// <summary>Очаг/печь: языки пламени в модели.</summary>
     public const string StoveFlameMesh = "Stove_Flame_Center";
@@ -125,17 +122,16 @@ public static class InteriorShopAnchors
         return true;
     }
 
-    /// <summary>Точка, с которой берут товар: перед стеллажом с товаром.</summary>
+    /// <summary>Точка, с которой берут товар: перед первым стеллажом.</summary>
     public static bool TryGetGoodsShelfPoint(out Vector3 point)
     {
         point = Vector3.zero;
-        if (!TryGetBounds(GoodsShelfMesh, out Bounds shelf))
+        if (!TryGetBounds(Shelf1Name, out Bounds shelf))
         {
             return false;
         }
 
-        // Стеллаж стоит у задней стены, поэтому точка смещается к центру зала (+Z).
-        point = new Vector3(shelf.center.x, shelf.center.y, shelf.max.z + 0.35f);
+        point = new Vector3(shelf.center.x, shelf.center.y, shelf.max.z + 0.75f);
         return true;
     }
 
@@ -153,17 +149,15 @@ public static class InteriorShopAnchors
         return true;
     }
 
-    /// <summary>Верхняя плоскость стойки Mesh_124 — сюда ставим стакан кофе.</summary>
+    /// <summary>Верхняя плоскость второго стеллажа — общая точка у стойки у входа.</summary>
     public static bool TryGetCoffeeCupPoint(out Vector3 point)
     {
         point = Vector3.zero;
-        if (!TryGetBounds(CoffeeCounterMesh, out Bounds counter))
+        if (!TryGetBounds(Shelf2Name, out Bounds counter))
         {
             return false;
         }
 
-        // Стойка стоит поперёк зала у входа: стакан ставим ближе к покупателю (макс. Z)
-        // и чуть вбок, чтобы он не оказался под рукой кассира.
         point = new Vector3(
             counter.center.x + counter.extents.x * 0.45f,
             counter.max.y,
