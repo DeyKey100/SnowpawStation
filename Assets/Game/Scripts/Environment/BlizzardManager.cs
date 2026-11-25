@@ -21,7 +21,7 @@ public sealed class BlizzardManager : MonoBehaviour
 
     [Header("Поведение")]
     [SerializeField] private bool enabledByDefault = true;
-    [SerializeField] private List<string> indoorScenes = new List<string> { "GasStationInterior" };
+    [SerializeField] private List<string> indoorScenes = new List<string> { "GasStationInterior", "HouseInterior" };
 
     [Header("Сила метели")]
     [SerializeField, Range(0f, 1f)] private float defaultIntensity = 0.7f;
