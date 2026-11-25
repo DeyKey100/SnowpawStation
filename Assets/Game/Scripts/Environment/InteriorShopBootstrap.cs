@@ -31,11 +31,6 @@ public sealed class InteriorShopBootstrap : MonoBehaviour
     [SerializeField, Min(1f)] private float doorwayHeight = 2.35f;
     [SerializeField] private Color wallColor = new Color(0.113f, 0.164f, 0.176f);
 
-    [Header("Дверь")]
-    [SerializeField] private bool makeDoorTranslucent = true;
-    [SerializeField] private string doorObjectName = "InteriorDoor";
-    [SerializeField, Range(0.05f, 1f)] private float doorAlpha = 0.5f;
-
     [Header("Персонаж")]
     [SerializeField, Tooltip("Гасить служебный меш капсулы-коллайдера: игрок не должен видеть геометрию коллизии вокруг себя.")]
     private bool hidePlayerCapsule = true;
@@ -113,11 +108,6 @@ public sealed class InteriorShopBootstrap : MonoBehaviour
         if (ensureCamera)
         {
             EnsureCamera();
-        }
-
-        if (makeDoorTranslucent)
-        {
-            EnsureDoorTranslucent();
         }
 
         if (buildMissingWalls)
@@ -521,89 +511,6 @@ public sealed class InteriorShopBootstrap : MonoBehaviour
         GameObject door = GameObject.Find("Door_Exit");
         float x = door != null ? door.transform.position.x : room.center.x;
         return Mathf.Clamp(x, room.min.x + 0.6f, room.max.x - 0.6f);
-    }
-
-    /// <summary>
-    /// Полупрозрачная дверь: старая дверь набора — обычный непрозрачный меш, и из-за неё
-    /// проём читался как глухая перегородка. Показываем створку и переводим её материал
-    /// в прозрачный режим, чтобы сквозь дверь было видно улицу.
-    /// Столкновения с двери снимаем: выход обрабатывает SceneDoorTrigger, а непрозрачные
-    /// коллайдеры створки раньше отталкивали камеру третьего лица внутрь персонажа.
-    /// </summary>
-    private void EnsureDoorTranslucent()
-    {
-        GameObject door = FindInactive(doorObjectName);
-        if (door == null)
-        {
-            return;
-        }
-
-        if (!door.activeSelf)
-        {
-            door.SetActive(true);
-        }
-
-        foreach (Collider collider in door.GetComponentsInChildren<Collider>(true))
-        {
-            Destroy(collider);
-        }
-
-        Renderer[] renderers = door.GetComponentsInChildren<Renderer>(true);
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            Material source = renderers[i].sharedMaterial;
-            if (source == null)
-            {
-                continue;
-            }
-
-            Material seeThrough = new Material(source) { name = source.name + " (полупрозрачная дверь)" };
-            ApplyTranslucent(seeThrough, doorAlpha, 3000);
-            renderers[i].sharedMaterial = seeThrough;
-        }
-
-        Debug.Log($"[Snowpaw Station] Магазин: дверь «{doorObjectName}» стала полупрозрачной.");
-    }
-
-    /// <summary>
-    /// Поиск объекта по имени, включая выключенные: дверь в сцене лежит с active=false,
-    /// а GameObject.Find неактивные объекты не возвращает.
-    /// </summary>
-    private static GameObject FindInactive(string objectName)
-    {
-        if (string.IsNullOrEmpty(objectName))
-        {
-            return null;
-        }
-
-        var scenes = UnityEngine.SceneManagement.SceneManager.sceneCount;
-        for (int s = 0; s < scenes; s++)
-        {
-            var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(s);
-            if (!scene.IsValid() || !scene.isLoaded)
-            {
-                continue;
-            }
-
-            foreach (GameObject root in scene.GetRootGameObjects())
-            {
-                if (root.name == objectName)
-                {
-                    return root;
-                }
-
-                Transform[] all = root.GetComponentsInChildren<Transform>(true);
-                for (int i = 0; i < all.Length; i++)
-                {
-                    if (all[i].name == objectName)
-                    {
-                        return all[i].gameObject;
-                    }
-                }
-            }
-        }
-
-        return null;
     }
 
     /// <summary>

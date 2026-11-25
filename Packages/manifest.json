@@ -1,7 +1,7 @@
 {
   "dependencies": {
-    "com.ivanmurzak.unity.mcp": "1.14.0",
-    "com.ivanmurzak.unity.mcp.navigation": "2.1.4",
+    "com.ivanmurzak.unity.mcp": "1.14.3",
+    "com.ivanmurzak.unity.mcp.navigation": "2.1.7",
     "com.unity.ai.inference": "2.6.1",
     "com.unity.asset-manager-for-unity": "1.12.1",
     "com.unity.cinemachine": "3.1.7",
