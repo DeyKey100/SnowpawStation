@@ -43,7 +43,7 @@ public sealed class AdminPanel : MonoBehaviour
             Close();
         }
         else if (!PauseMenu.IsPaused && !SceneLoadingScreen.IsLoading &&
-                 !PlayerControlLock.IsHeldBy("chopping"))
+                 !PlayerControlLock.IsHeldBy("chopping") && !FuelingMinigame.IsActive)
         {
             // DayLoopManager живёт в уличной сцене и в интерьере, запущенном
             // напрямую, его нет — панель всё равно должна открываться.

@@ -99,7 +99,8 @@ public sealed class PauseMenu : MonoBehaviour
             return;
         }
 
-        if (AdminPanel.IsOpen || RadioMusicUI.BlocksPauseInput || !IsEscapePressed())
+        if (AdminPanel.IsOpen || RadioMusicUI.BlocksPauseInput || FuelingMinigame.BlocksPauseInput ||
+            !IsEscapePressed())
         {
             return;
         }
