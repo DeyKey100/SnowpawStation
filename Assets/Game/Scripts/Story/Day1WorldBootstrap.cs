@@ -221,8 +221,8 @@ public sealed class Day1WorldBootstrap : MonoBehaviour
 }
 
 /// <summary>
-/// Мини-игра колки: бегунок бегает, зелёная зона в центре. ЛКМ в зоне = полено.
-/// Промах — бегунок просто перезапускается. На время игры вешается InteractionLock "chopping".
+/// Мини-игра колки: бегунок бегает, зелёная зона в центре. ЛКМ/Пробел в зоне = полено.
+/// Промах мягко возвращает бегунок в начало и подсказывает направление. На время игры вешается InteractionLock "chopping".
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class WoodChoppingMinigame : MonoBehaviour
@@ -232,20 +232,47 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
 
     /// <summary>Скорость растёт за промах, но не бесконечно: иначе шаг за кадр
     /// становится больше полоски и она визуально «замирает» между крайними точками.</summary>
-    private const float SpeedPerMiss = 0.15f;
-    private const float MaxSpeed = 2.6f;
+    private const float SpeedPerMiss = 0.05f;
+    private const float MaxSpeed = 1.9f;
 
     /// <summary>Предел шага за кадр: при просадке fps бегунок не должен перескакивать полосу.</summary>
     private const float MaxStepPerFrame = 0.12f;
+
+    private const float SweetSpotMin = 0.4f;
+    private const float SweetSpotMax = 0.6f;
 
     private float marker;       // 0..1
     private float direction = 1f;
     private float speed = BaseSpeed;
     private int misses;
+    private float feedbackTimer;
+    private float graceTimer;
+    private float resultTimer;
+    private string feedbackText = "";
     private bool active;
     private bool success;
+    private Transform cachedTransform;
+    private AudioManager audioManager;
+
+    private static AudioClip chopClip;
+    private static AudioClip missClip;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetAudio()
+    {
+        if (chopClip != null) { Object.Destroy(chopClip); }
+        if (missClip != null) { Object.Destroy(missClip); }
+        chopClip = null;
+        missClip = null;
+    }
 
     public bool IsActive => active;
+
+    private void Awake()
+    {
+        cachedTransform = transform;
+        audioManager = AudioManager.EnsureInstance();
+    }
 
     /// <summary>Запуск. onSuccess — полено добыто.</summary>
     public void Begin(System.Action onSuccess)
@@ -261,6 +288,10 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
         direction = 1f;
         speed = BaseSpeed;
         misses = 0;
+        graceTimer = 0f;
+        resultTimer = 0f;
+        feedbackTimer = 0f;
+        feedbackText = "";
         InteractionLock.Add("chopping");
 
         // Пока идёт колка — персонаж и камера стоят: игрок рубит, а не ходит вокруг колоды.
@@ -281,6 +312,12 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
         {
             onSuccess?.Invoke();
         }
+
+        while (resultTimer > 0f)
+        {
+            resultTimer = Mathf.Max(0f, resultTimer - Time.deltaTime);
+            yield return null;
+        }
     }
 
     /// <summary>Колоду выгрузили/выключили посреди колки — иначе игрок остался бы замороженным.</summary>
@@ -291,12 +328,59 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
         PlayerControlLock.Remove("chopping");
     }
 
+    private void PlayCue(bool hit)
+    {
+        if (audioManager == null) { audioManager = AudioManager.EnsureInstance(); }
+        if (audioManager == null) { return; }
+        AudioClip clip = hit ? GetChopClip() : GetMissClip();
+        if (clip == null) { return; }
+        float pitch = hit ? UnityEngine.Random.Range(0.96f, 1.04f) : UnityEngine.Random.Range(0.92f, 1.02f);
+        audioManager.PlaySfx(clip, cachedTransform != null ? cachedTransform.position : transform.position,
+            hit ? 0.72f : 0.38f, 1f, pitch, false, 1.2f, 10f);
+    }
+
+    private static AudioClip GetChopClip()
+    {
+        if (chopClip == null) { chopClip = CreateCue("WoodChop_Cozy", 0.24f, true); }
+        return chopClip;
+    }
+
+    private static AudioClip GetMissClip()
+    {
+        if (missClip == null) { missClip = CreateCue("WoodChop_Swish", 0.18f, false); }
+        return missClip;
+    }
+
+    private static AudioClip CreateCue(string name, float seconds, bool impact)
+    {
+        const int sampleRate = 22050;
+        int sampleCount = Mathf.CeilToInt(sampleRate * seconds);
+        float[] samples = new float[sampleCount];
+        System.Random random = new System.Random(name.GetHashCode());
+        for (int i = 0; i < sampleCount; i++)
+        {
+            float t = i / (float)sampleRate;
+            float envelope = Mathf.Sin(Mathf.PI * Mathf.Clamp01(t / seconds));
+            float noise = (float)(random.NextDouble() * 2.0 - 1.0);
+            float tone = Mathf.Sin(2f * Mathf.PI * (impact ? 155f : 500f) * t);
+            float body = impact ? tone * Mathf.Exp(-12f * t) : 0f;
+            samples[i] = Mathf.Clamp((noise * (impact ? 0.16f : 0.07f) + body * (impact ? 0.30f : 0.04f)) * envelope, -0.8f, 0.8f);
+        }
+        AudioClip clip = AudioClip.Create(name, sampleCount, 1, sampleRate, false);
+        clip.SetData(samples, 0);
+        clip.hideFlags = HideFlags.HideAndDontSave;
+        return clip;
+    }
+
     private void Update()
     {
         if (!active)
         {
             return;
         }
+
+        feedbackTimer = Mathf.Max(0f, feedbackTimer - Time.deltaTime);
+        graceTimer = Mathf.Max(0f, graceTimer - Time.deltaTime);
 
         // Скорость держится постоянной, пока игрок не промахнётся: иначе полоска
         // разгоняется сама по себе и через полминуты перестаёт читаться.
@@ -317,26 +401,38 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
         bool pressed;
 #if ENABLE_INPUT_SYSTEM
         Mouse mouse = Mouse.current;
-        pressed = mouse != null && mouse.leftButton.wasPressedThisFrame;
+        Keyboard keyboard = Keyboard.current;
+        pressed = (mouse != null && mouse.leftButton.wasPressedThisFrame) ||
+            (keyboard != null && keyboard.spaceKey.wasPressedThisFrame);
 #else
-        pressed = Input.GetMouseButtonDown(0);
+        pressed = Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space);
 #endif
 
         if (pressed)
         {
-            bool hit = marker >= 0.4f && marker <= 0.6f;
+            // Чуть более широкая «уютная» зона после промаха не наказывает за один неловкий кадр.
+            float forgiveness = graceTimer > 0f ? 0.035f : 0f;
+            bool hit = marker >= SweetSpotMin - forgiveness && marker <= SweetSpotMax + forgiveness;
             if (hit)
             {
                 success = true;
+                feedbackText = marker >= 0.45f && marker <= 0.55f ? "Точно в сучок!" : "Хороший замах!";
+                feedbackTimer = 0.8f;
+                resultTimer = 0.35f;
+                PlayCue(true);
                 active = false;
             }
             else
             {
-                // Промах: каждое второе попадание мимо ускоряет бегунок, но в пределах MaxSpeed.
+                bool wasLeft = marker < SweetSpotMin;
                 misses++;
                 speed = Mathf.Min(BaseSpeed + SpeedPerMiss * misses, MaxSpeed);
                 marker = 0f;
                 direction = 1f;
+                graceTimer = 0.18f;
+                feedbackText = wasLeft ? "Чуть правее…" : "Чуть левее…";
+                feedbackTimer = 0.7f;
+                PlayCue(false);
             }
         }
 
@@ -356,27 +452,33 @@ public sealed class WoodChoppingMinigame : MonoBehaviour
 
     private void OnGUI()
     {
-        if (!active)
+        if (!active && resultTimer <= 0f)
         {
             return;
         }
 
-        float w = 420f, h = 26f;
-        Rect bar = new Rect((Screen.width - w) * 0.5f, Screen.height * 0.5f, w, h);
-        GUI.Box(bar, GUIContent.none);
-        Rect green = new Rect(bar.x + bar.width * 0.4f, bar.y, bar.width * 0.2f, h);
-        GUI.color = new Color(0.3f, 0.8f, 0.35f, 0.85f);
-        GUI.DrawTexture(green, Texture2D.whiteTexture);
-        GUI.color = Color.white;
-        Rect knob = new Rect(bar.x + bar.width * marker - 3f, bar.y - 4f, 6f, h + 8f);
-        GUI.DrawTexture(knob, Texture2D.whiteTexture);
-        const string hint = "ЛКМ - рубить дрова, Q - выйти.";
-        GUIStyle hintStyle = UiTheme.Label(18f, UiTheme.Text,
-            alignment: TextAnchor.UpperCenter, wordWrap: true, scaleWithScreen: false);
-        float hintWidth = Mathf.Min(Screen.width - 32f, Mathf.Max(w, hintStyle.CalcSize(new GUIContent(hint)).x));
-        float hintHeight = UiTheme.TextHeight(hintStyle, hint, hintWidth);
-        Rect hintRect = new Rect((Screen.width - hintWidth) * 0.5f, bar.yMax + 12f, hintWidth, hintHeight);
-        UiTheme.Fill(new Rect(hintRect.x - 8f, hintRect.y - 4f, hintRect.width + 16f, hintRect.height + 8f), UiTheme.Night);
-        GUI.Label(hintRect, hint, hintStyle);
+        float scale = UiTheme.Scale;
+        float w = Mathf.Min(Screen.width - 32f, 460f * scale);
+        float h = 30f * scale;
+        Rect panel = new Rect((Screen.width - w - 28f) * 0.5f, Screen.height * 0.5f - 56f * scale, w + 28f, 128f * scale);
+        UiTheme.Frame(panel, UiTheme.Night, UiTheme.Frost);
+        GUI.Label(new Rect(panel.x + 14f, panel.y + 10f, panel.width - 28f, 24f * scale),
+            "КОЛКА ДРОВ", UiTheme.Label(18f, UiTheme.Cream, FontStyle.Bold, TextAnchor.MiddleCenter));
+
+        Rect bar = new Rect(panel.x + 14f, panel.y + 42f * scale, w, h);
+        UiTheme.Bar(bar, marker, UiTheme.Ember);
+        Rect sweet = new Rect(bar.x + bar.width * SweetSpotMin, bar.y, bar.width * (SweetSpotMax - SweetSpotMin), h);
+        UiTheme.Fill(sweet, new Color(0.32f, 0.75f, 0.42f, 0.55f));
+        Rect knob = new Rect(bar.x + bar.width * marker - 4f * scale, bar.y - 5f * scale, 8f * scale, h + 10f * scale);
+        UiTheme.Fill(knob, UiTheme.Cream);
+
+        string hint = "ЛКМ или ПРОБЕЛ — замах   Q — выйти";
+        GUI.Label(new Rect(panel.x + 14f, panel.y + 78f * scale, w, 24f * scale), hint,
+            UiTheme.Label(15f, UiTheme.Muted, alignment: TextAnchor.MiddleCenter));
+        if (feedbackTimer > 0f && !string.IsNullOrEmpty(feedbackText))
+        {
+            GUI.Label(new Rect(panel.x + 14f, panel.y + 101f * scale, w, 22f * scale), feedbackText,
+                UiTheme.Label(16f, success ? UiTheme.Ember : UiTheme.Ice, FontStyle.Bold, TextAnchor.MiddleCenter));
+        }
     }
 }

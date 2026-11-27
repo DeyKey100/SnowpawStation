@@ -3,7 +3,7 @@ using UnityEngine;
 
 [ExecuteAlways]
 [DisallowMultipleComponent]
-public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
+public sealed class SnowPileInteractable : MonoBehaviour, IInteractable, IInteractionAvailability
 {
     [Header("References")]
     [SerializeField] private DayLoopManager dayLoopManager;
@@ -34,8 +34,14 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
     private System.Action onCleared;
     private Vector3 animationStartLocalPosition;
     private Vector3 animationStartLocalScale;
+    private SnowPileClearingEffects clearingEffects;
+    private const int ClearingStrokeCount = 3;
 
     private DayLoopManager CurrentManager => managedSpawn ? spawnManager : dayLoopManager;
+
+    public bool CanInteractNow => Application.IsPlaying(gameObject) && isActiveAndEnabled &&
+        !cleared && clearingRoutine == null && GameState.HasShovel &&
+        CanClearDuringCurrentPhase() && IsUnlocked();
 
     private void Awake()
     {
@@ -114,6 +120,7 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
             clearingRoutine = null;
         }
 
+        clearingEffects?.Reset();
         cleared = false;
         clearedDay = -1;
         observedDay = CurrentManager != null ? CurrentManager.CurrentDay : -1;
@@ -307,7 +314,12 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
             return string.Empty;
         }
 
-        // Записка — первая задача утра: пока её не прочли, сугроб не предлагает взаимодействие.
+        if (!GameState.HasShovel)
+        {
+            return "Для уборки требуется инструмент - Лопата";
+        }
+
+        // Записка остаётся первой задачей утра даже при наличии инструмента.
         if (!IsUnlocked())
         {
             return string.Empty;
@@ -341,7 +353,7 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
 
         RefreshForNewDay();
 
-        if (cleared || clearingRoutine != null)
+        if (cleared || clearingRoutine != null || !GameState.HasShovel)
         {
             return;
         }
@@ -382,43 +394,69 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
     private IEnumerator ClearSnowRoutine()
     {
         EnsureInitialized();
+        // Lazy creation avoids cloning runtime FX when the spawner copies its template.
+        if (clearingEffects == null)
+        {
+            clearingEffects = new SnowPileClearingEffects(gameObject,
+                snowRenderer != null ? snowRenderer.sharedMaterial : null);
+        }
+        clearingEffects.Reset();
         // The root may have moved since PrepareForSpawn; animate from its spawn pose.
-        Vector3 startPosition = visualTransform.localPosition;
-        Vector3 startScale = visualTransform.localScale;
-        animationStartLocalPosition = startPosition;
-        animationStartLocalScale = startScale;
-        Vector3 endPosition = startPosition + Vector3.down * sinkDistance;
-        Vector3 endScale = new Vector3(startScale.x, 0.01f, startScale.z);
-
+        animationStartLocalPosition = visualTransform.localPosition;
+        animationStartLocalScale = visualTransform.localScale;
+        float baseY = snowMeshFilter != null && snowMeshFilter.sharedMesh != null
+            ? snowMeshFilter.sharedMesh.bounds.min.y : -0.5f;
         if (snowCollider != null)
         {
             snowCollider.enabled = false;
         }
 
-        float duration = Mathf.Max(0.1f, clearingDuration);
+        const float extraStrokePause = 0.2f;
+        float strokeDuration = Mathf.Max(0.1f, clearingDuration) / ClearingStrokeCount;
+        float interval = strokeDuration + extraStrokePause;
+        float duration = strokeDuration * ClearingStrokeCount
+            + extraStrokePause * (ClearingStrokeCount - 1);
         float elapsed = 0f;
+        int lastStroke = -1;
         while (elapsed < duration)
         {
-            elapsed += Time.deltaTime;
-            float normalizedTime = Mathf.Clamp01(elapsed / duration);
-            float easedTime = clearingEase != null
-                ? clearingEase.Evaluate(normalizedTime)
-                : Mathf.SmoothStep(0f, 1f, normalizedTime);
-
-            visualTransform.localPosition = Vector3.LerpUnclamped(
-                startPosition,
-                endPosition,
-                easedTime);
-            visualTransform.localScale = Vector3.LerpUnclamped(
-                startScale,
-                endScale,
-                easedTime);
+            float strokeTime = elapsed / interval;
+            int stroke = Mathf.Min((int)strokeTime, ClearingStrokeCount - 1);
+            if (stroke != lastStroke)
+            {
+                // Threshold crossing, not a frame equality. A hitch skips stale FX rather
+                // than playing several scrapes on the same frame.
+                Bounds bounds = snowRenderer != null ? snowRenderer.bounds
+                    : new Bounds(visualTransform.position, Vector3.one * 0.5f);
+                clearingEffects.PlayStroke(bounds, visualTransform.forward, stroke, elapsed, strokeDuration);
+                lastStroke = stroke;
+            }
+            // Keep the original stroke speed; only the gaps between strokes are longer.
+            float strokeProgress = Mathf.Clamp01((elapsed - stroke * interval) / (strokeDuration * 0.72f));
+            float eased = clearingEase != null
+                ? Mathf.Clamp01(clearingEase.Evaluate(strokeProgress))
+                : Mathf.SmoothStep(0f, 1f, strokeProgress);
+            ApplyClearingPose(baseY, (stroke + eased) / ClearingStrokeCount,
+                stroke == ClearingStrokeCount - 1 ? eased : 0f);
+            clearingEffects.Advance(elapsed);
             yield return null;
+            elapsed += Time.deltaTime;
         }
 
-        visualTransform.localPosition = endPosition;
-        visualTransform.localScale = endScale;
+        ApplyClearingPose(baseY, 1f, 1f);
         FinishClearing();
+    }
+
+    private void ApplyClearingPose(float baseY, float removed, float finalSink)
+    {
+        Vector3 scale = animationStartLocalScale;
+        scale.y *= Mathf.Lerp(1f, 0.02f, removed);
+        // Compensate scaling around the pivot so the mesh base stays on the ground.
+        Vector3 baseOffset = visualTransform.localRotation * Vector3.up
+            * (baseY * (animationStartLocalScale.y - scale.y));
+        visualTransform.localScale = scale;
+        visualTransform.localPosition = animationStartLocalPosition + baseOffset
+            + Vector3.down * (sinkDistance * finalSink);
     }
 
     internal bool TryClearImmediately()
@@ -429,7 +467,7 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
         }
 
         RefreshForNewDay();
-        if (cleared || !CanClearDuringCurrentPhase() || !IsUnlocked())
+        if (cleared || !GameState.HasShovel || !CanClearDuringCurrentPhase() || !IsUnlocked())
         {
             return false;
         }
@@ -445,6 +483,7 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
 
     private void FinishClearing()
     {
+        clearingEffects?.Reset();
         cleared = true;
         DayLoopManager manager = CurrentManager;
         int completedDay = manager != null ? manager.CurrentDay : -1;
@@ -543,8 +582,15 @@ public sealed class SnowPileInteractable : MonoBehaviour, IInteractable
         PrepareForSpawn();
     }
 
+    private void OnDestroy()
+    {
+        clearingEffects?.Dispose();
+        clearingEffects = null;
+    }
+
     private void OnDisable()
     {
+        clearingEffects?.Reset();
         if (clearingRoutine == null)
         {
             return;

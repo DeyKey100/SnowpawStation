@@ -32,6 +32,7 @@ public sealed class KeeperNoteInteractable : MonoBehaviour, IInteractable
     {
         DialogueScript s = DialogueBuilder.Create("keeper_note", "Записка предыдущего смотрителя:");
         s.Note("«Корми печь, руби дрова во дворе, держи дорожки чистыми. Перевал не прощает холода».");
+        s.Note("«Лопата висит на стене в магазине. Возьми её и расчисти сугроб у входа - за ночь снова намело».");
         s.Note("*«Перевал не прощает холода». Ободряюще.*");
         s.Choose(DialogueBuilder.Option("Убрать записку", null, null, null));
 
@@ -54,7 +55,7 @@ public sealed class KeeperNoteInteractable : MonoBehaviour, IInteractable
     /// <summary>Записка убрана в карман: с земли не валяется.</summary>
     private static void RemoveAfterReading(GameObject noteObject)
     {
-        GameState.AddNote("Записка смотрителя: «Перевал не прощает холода».");
+        GameState.AddNote("Записка смотрителя: «Перевал не прощает холода». Лопата висит на стене в магазине - взять её и расчистить сугроб у входа.");
 
         if (noteObject != null)
         {

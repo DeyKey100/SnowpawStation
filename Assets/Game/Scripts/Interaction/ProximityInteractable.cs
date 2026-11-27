@@ -44,11 +44,11 @@ public class ProximityInteractable : MonoBehaviour
     private void Awake()
     {
         IInteractable target = ResolveTarget();
-        if (target is RadioInteractable) { return; } // Radio already owns its switch sound.
+        // These targets own their sound timing; E must not add a generic one-shot.
+        if (target is RadioInteractable || target is SnowPileInteractable || target is WoodPileInteractable) { return; }
         if (!TryGetComponent(out SfxEmitter emitter)) { emitter = gameObject.AddComponent<SfxEmitter>(); }
         string sound = target is WoodPileInteractable || target is StoveInteractable
             ? "WAV/Fireside/log_drop_01.wav"
-            : target is SnowPileInteractable ? "WAV/Snow Play/snowball_hit_soft_01.wav"
             : target is ShopGoodItem shopGood && shopGood.GoodId == "coffee" ? "WAV/Fireside/mug_clink_01.wav"
             : target is DoorInteractable ? "WAV/Weather/door_open_wind_01.wav"
             : "WAV/Winter UI/ui_select_01.wav";

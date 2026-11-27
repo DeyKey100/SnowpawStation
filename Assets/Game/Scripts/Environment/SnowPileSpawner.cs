@@ -11,39 +11,46 @@ using UnityEngine.SceneManagement;
 public sealed class SnowPileSpawner : MonoBehaviour
 {
     private const string StationSceneName = "StationMain";
-    private const float GroundY = 0.5f;
+    private const float GroundY = 0.5f; // Верх SnowFloor под всей площадкой станции.
+    private const float PilePivotHeight = 0.25f; // Половина высоты шаблона (scale.y = 0.5).
     private const float RetryInterval = 1f;
     private const int MaxPileCount = 6;
 
-    // Координаты выбраны по мировым bounds StationMain, не по смещённым pivot FBX.
-    // Центральные островки колонок и полоса движения машины справа от них свободны.
+    // X/Z заданы в мировых координатах; первая точка выбрана вручную у магазина.
+    // Y — минимальная высота pivot: Terrain может поднять её при размещении.
     private static readonly Vector3[] SpawnPositions =
     {
-        new Vector3(-13.7f, 0.75f, -4.7f),  // подход к магазину с юга
-        new Vector3(-7.1f, 0.75f, -6.35f),  // южный подход к колонке №1, левее полосы машины
-        new Vector3(-7.1f, 0.75f, -8.95f),  // продолжение подхода к колонке №1
-        new Vector3(-17.5f, 0.75f, -5.5f),  // западный двор, в стороне от колоды
-        new Vector3(-15f, 0.75f, -8.5f),
-        new Vector3(-11.5f, 0.75f, -10.8f),
-        new Vector3(-18f, 0.75f, -9f),       // запасные точки при занятом основном месте
-        new Vector3(-14f, 0.75f, -12f),
-        new Vector3(-11f, 0.75f, -14f),
-        new Vector3(-18f, 0.75f, -12.5f),
+        new Vector3(-19.244f, 0.891f, -2.3f), // 0: выбранная точка первого сугроба у магазина
+        new Vector3(-15.5f, 0.75f, -6.5f),   // 1: подход к FuelPump_1 за краем навеса
+        new Vector3(-15.5f, 0.75f, -9.5f),   // 2: продолжение подхода к той же колонке №1
+        new Vector3(-27.0f, 0.75f, -6.5f),   // 3: западный двор, в стороне от WoodPile
+        new Vector3(-22.0f, 0.75f, -6.5f),   // 4: двор за магазином
+        new Vector3(-12.0f, 0.75f, -12.0f),  // 5: свободный угол двора
+        new Vector3(-24.0f, 0.75f, -10.0f),  // 6: запасная точка во дворе
+        new Vector3(-16.0f, 0.75f, -14.0f),  // 7: запасная точка во дворе
+        new Vector3(-23.5f, 0.75f, 10.5f),   // 8: запасная точка с другой стороны магазина
+        new Vector3(-29.0f, 0.75f, -2.0f),   // 9: запасная точка западнее магазина и колоды
     };
 
     private static readonly int[][] PointOrder =
     {
+        // Day 1 (1 pile): приоритет — дверь магазина / южный подход
         new[] { 0, 3, 4, 5, 6, 7, 8, 9, 1, 2 },
-        new[] { 1, 2, 0, 3, 4, 5, 6, 7, 8, 9 },
-        new[] { 0, 3, 4, 1, 2, 5, 6, 7, 8, 9 },
+        // Day 2 (3 piles): 2 обязательных на подходе к колонке №1 + 1 во дворе
+        new[] { 1, 2, 3, 0, 4, 5, 6, 7, 8, 9 },
+        // Day 3 (6 piles): первые 3 обязательных во дворе, остальные — на подходах
+        new[] { 3, 4, 5, 0, 1, 2, 6, 7, 8, 9 },
     };
 
-    // Запас по X/Z включает место для обхода игроком; нижняя грань выше SnowFloor.
+    // Запас по X/Z включает место для обхода игроком; нижняя грань выше поверхности.
     private static readonly Vector3 CheckHalfExtents = new Vector3(1.5f, 0.24f, 1.25f);
+    // У двери проверяем сам сугроб без дополнительного запаса для обхода.
+    private static readonly Vector3 DoorCheckHalfExtents = new Vector3(1.01f, 0.24f, 0.75f);
     private readonly Collider[] overlapResults = new Collider[64];
     private readonly List<GameObject> sceneRoots = new List<GameObject>();
     private readonly List<SnowPileInteractable> pool = new List<SnowPileInteractable>(MaxPileCount);
     private readonly List<Renderer> scenery = new List<Renderer>();
+    private readonly List<Terrain> terrains = new List<Terrain>();
     private readonly List<string> requiredTasks = new List<string>(MaxPileCount);
     private readonly bool[] clearedSlots = new bool[MaxPileCount];
     private readonly bool[] placedSlots = new bool[MaxPileCount];
@@ -157,12 +164,13 @@ public sealed class SnowPileSpawner : MonoBehaviour
 
         stationScene = scene;
         pool.Clear();
+        terrains.Clear();
         sceneRoots.Clear();
         scene.GetRootGameObjects(sceneRoots);
         // В сцене два отдельных корневых сугроба: собираем оба, включая неактивные.
         for (int i = 0; i < sceneRoots.Count; i++)
         {
-            CollectPiles(sceneRoots[i].transform);
+            CollectSpawnSources(sceneRoots[i].transform);
         }
 
         if (pool.Count == 0)
@@ -214,15 +222,19 @@ public sealed class SnowPileSpawner : MonoBehaviour
         return cleared;
     }
 
-    private void CollectPiles(Transform node)
+    private void CollectSpawnSources(Transform node)
     {
+        if (node.TryGetComponent(out Terrain terrain))
+        {
+            terrains.Add(terrain);
+        }
         if (node.TryGetComponent(out SnowPileInteractable pile))
         {
             pool.Add(pile);
         }
         for (int i = 0; i < node.childCount; i++)
         {
-            CollectPiles(node.GetChild(i));
+            CollectSpawnSources(node.GetChild(i));
         }
     }
 
@@ -237,6 +249,7 @@ public sealed class SnowPileSpawner : MonoBehaviour
         pointRoot = null;
         pool.Clear();
         scenery.Clear();
+        terrains.Clear();
         sceneRoots.Clear();
         Array.Clear(placedSlots, 0, placedSlots.Length);
         // clearedSlots живут до DayStarted, а не до выхода из StationMain.
@@ -324,8 +337,13 @@ public sealed class SnowPileSpawner : MonoBehaviour
                 {
                     continue;
                 }
-                Vector3 position = pointRoot.GetChild(pointIndex).position;
-                if (!IsClear(position))
+                Transform point = pointRoot.GetChild(pointIndex);
+                Vector3 position = point.position;
+                position.y = Mathf.Max(SpawnPositions[pointIndex].y,
+                    GetGroundHeight(position) + PilePivotHeight);
+                point.position = position;
+                Vector3 halfExtents = pointIndex == 0 ? DoorCheckHalfExtents : CheckHalfExtents;
+                if (!IsClear(position, halfExtents))
                 {
                     continue;
                 }
@@ -375,7 +393,17 @@ public sealed class SnowPileSpawner : MonoBehaviour
         }
         if (node.TryGetComponent(out Renderer renderer) && renderer.enabled)
         {
-            scenery.Add(renderer);
+            // Общий AABB навеса включает пустоту под крышей. Если коллайдер
+            // использует тот же mesh, точнее проверить его через OverlapBox ниже.
+            bool hasMatchingCollider = renderer is MeshRenderer &&
+                node.TryGetComponent(out MeshFilter filter) &&
+                node.TryGetComponent(out MeshCollider meshCollider) &&
+                meshCollider.enabled && !meshCollider.isTrigger &&
+                filter.sharedMesh != null && meshCollider.sharedMesh == filter.sharedMesh;
+            if (!hasMatchingCollider)
+            {
+                scenery.Add(renderer);
+            }
         }
         for (int i = 0; i < node.childCount; i++)
         {
@@ -383,20 +411,43 @@ public sealed class SnowPileSpawner : MonoBehaviour
         }
     }
 
-    private bool IsClear(Vector3 position)
+    private float GetGroundHeight(Vector3 position)
     {
-        Vector3 center = new Vector3(position.x, GroundY + 0.26f, position.z);
-        Bounds check = new Bounds(center, CheckHalfExtents * 2f);
+        float height = GroundY;
+        for (int i = 0; i < terrains.Count; i++)
+        {
+            Terrain terrain = terrains[i];
+            if (terrain == null || !terrain.isActiveAndEnabled || terrain.terrainData == null)
+            {
+                continue;
+            }
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = terrain.terrainData.size;
+            if (position.x < origin.x || position.x > origin.x + size.x ||
+                position.z < origin.z || position.z > origin.z + size.z)
+            {
+                continue;
+            }
+            height = Mathf.Max(height, terrain.SampleHeight(position) + origin.y);
+        }
+        return height;
+    }
+
+    private bool IsClear(Vector3 position, Vector3 halfExtents)
+    {
+        float groundHeight = position.y - PilePivotHeight;
+        Vector3 center = position + Vector3.up * 0.01f;
+        Bounds check = new Bounds(center, halfExtents * 2f);
         // Bounds пропов тоже проверяются: WoodenWithAxe/новые модели могут не иметь Collider.
         for (int i = 0; i < scenery.Count; i++)
         {
             Bounds bounds = scenery[i].bounds;
-            if (bounds.max.y > GroundY + 0.01f && check.Intersects(bounds))
+            if (bounds.max.y > groundHeight + 0.01f && check.Intersects(bounds))
             {
                 return false;
             }
         }
-        int count = Physics.OverlapBoxNonAlloc(center, CheckHalfExtents, overlapResults,
+        int count = Physics.OverlapBoxNonAlloc(center, halfExtents, overlapResults,
             Quaternion.identity, ~0, QueryTriggerInteraction.Ignore);
         if (count == overlapResults.Length)
         {
