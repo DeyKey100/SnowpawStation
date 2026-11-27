@@ -635,7 +635,7 @@ MonoBehaviour:
   plateWorldOffsetY: 1.2
   targetSceneName: StationMain
   movePlayerToSpawn: 1
-  spawnPosition: {x: -15.783, y: 0.5, z: 4.135}
+  spawnPosition: {x: -25.13, y: 0.877, z: 4.123}
   spawnYaw: 0
   playerTag: Player
   activateDistance: 1.5
