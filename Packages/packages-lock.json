@@ -295,6 +295,15 @@
       },
       "url": "https://packages.unity.com"
     },
+    "com.zimennik.bayer-dither-urp": {
+      "version": "https://github.com/Zimennik/bayer-dither-urp.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.unity.render-pipelines.universal": "14.0.0"
+      },
+      "hash": "104eb701407fe5ad5e1a19657022b911b9557eb9"
+    },
     "extensions.unity.playerprefsex": {
       "version": "2.1.5",
       "depth": 1,
