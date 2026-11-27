@@ -45,7 +45,7 @@ public class ProximityInteractable : MonoBehaviour
     {
         IInteractable target = ResolveTarget();
         // These targets own their sound timing; E must not add a generic one-shot.
-        if (target is RadioInteractable || target is SnowPileInteractable) { return; }
+        if (target is RadioInteractable || target is SnowPileInteractable || target is WoodPileInteractable) { return; }
         if (!TryGetComponent(out SfxEmitter emitter)) { emitter = gameObject.AddComponent<SfxEmitter>(); }
         string sound = target is WoodPileInteractable || target is StoveInteractable
             ? "WAV/Fireside/log_drop_01.wav"

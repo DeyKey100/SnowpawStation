@@ -32,6 +32,8 @@ public class WoodPileInteractable : MonoBehaviour, IInteractable
         return loop == null || loop.IsMorningTaskUnlocked("chop_logs");
     }
 
+    private AudioManager audioManager;
+
     private FirewoodStorage Storage
     {
         get
@@ -44,6 +46,11 @@ public class WoodPileInteractable : MonoBehaviour, IInteractable
 
             return storage;
         }
+    }
+
+    private void Awake()
+    {
+        audioManager = AudioManager.EnsureInstance();
     }
 
     public void Interact()
@@ -76,7 +83,14 @@ public class WoodPileInteractable : MonoBehaviour, IInteractable
             return;
         }
 
-        minigame.Begin(() => AddChoppedLog(s));
+        minigame.Begin(() =>
+        {
+            if (AddChoppedLog(s) && audioManager != null)
+            {
+                AudioClip logDrop = AudioLibrary.FindSfx("WAV/Fireside/log_drop_01.wav");
+                audioManager.PlaySfx(logDrop, transform.position, 0.35f, 1f, 0.96f, false, 1.2f, 10f);
+            }
+        });
     }
 
     internal bool TryChopImmediately()

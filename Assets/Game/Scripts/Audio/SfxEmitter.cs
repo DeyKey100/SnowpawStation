@@ -158,7 +158,11 @@ public sealed class SfxEmitter : MonoBehaviour
     {
         // Also covers emitters already attached in a scene/prefab: SnowPile owns
         // the three scrape cues, including when E is pressed again while busy.
-        if (interactionMarker != null && interactionMarker.ResolveTarget() is SnowPileInteractable) { return; }
+        if (interactionMarker != null)
+        {
+            IInteractable target = interactionMarker.ResolveTarget();
+            if (target is SnowPileInteractable || target is WoodPileInteractable) { return; }
+        }
         if (isActiveAndEnabled && playOnInteract) { Play(); }
     }
 
