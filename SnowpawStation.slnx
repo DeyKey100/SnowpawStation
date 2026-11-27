@@ -51,6 +51,7 @@
   <Project Path="Unity.PerformanceTesting.csproj" />
   <Project Path="Unity.InputSystem.ForUI.csproj" />
   <Project Path="Unity.TextMeshPro.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Unity.Cloud.Common.Embedded.csproj" />
   <Project Path="Unity.TextMeshPro.Editor.csproj" />
   <Project Path="Unity.Rendering.LightTransport.Runtime.csproj" />
@@ -88,7 +89,6 @@
   <Project Path="Unity.InputSystem.ForUI.Editor.csproj" />
   <Project Path="Unity.CollabProxy.Editor.csproj" />
   <Project Path="Unity.RenderPipeline.Universal.ShaderLibrary.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="HeyHeyThere.PSXGasStationKitFree.csproj" />
   <Project Path="com.IvanMurzak.Unity.MCP.Editor.Rql.Lighting.csproj" />
   <Project Path="Unity.Cloud.AppLinking.Editor.Embedded.csproj" />

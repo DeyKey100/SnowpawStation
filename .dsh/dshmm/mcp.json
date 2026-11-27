@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "blender": {
+      "type": "stdio",
+      "timeout": 300000,
+      "command": "uvx",
+      "args": [
+        "mcp-for-blender"
+      ],
+      "env": {}
+    }
+  }
+}

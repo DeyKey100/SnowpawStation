@@ -118,15 +118,18 @@ public class PlayerInteraction : MonoBehaviour
             return;
         }
 
-        Focused = focused;
-        HasFocusedInteractable = true;
+        IInteractable target = focused.ResolveTarget();
+        bool canInteract = target != null &&
+            (!(target is IInteractionAvailability availability) || availability.CanInteractNow);
+        // Keep the private focus for drawing hints, but do not block doors with it.
+        Focused = canInteract ? focused : null;
+        HasFocusedInteractable = canInteract;
 
-        if (!InteractPressed() || !InputPriority.TryConsume())
+        if (!canInteract || !InteractPressed() || !InputPriority.TryConsume())
         {
             return;
         }
 
-        IInteractable target = focused.ResolveTarget();
         if (target != null)
         {
             focused.NotifyInteraction();

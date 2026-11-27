@@ -19,6 +19,7 @@ public static class GameState
     public static bool NoticedBarePaw { get; private set; }
     public static bool RedPickupHelped { get; private set; }
     public static bool HasGlove { get; private set; }
+    public static bool HasShovel { get; private set; }
 
     // --- служебное состояние дня ---
     private static readonly HashSet<string> DoneDayEvents = new HashSet<string>();
@@ -124,6 +125,20 @@ public static class GameState
         Debug.Log($"[Snowpaw Station] hasGlove = {value}.");
     }
 
+    /// <summary>Лопата остаётся у игрока между сценами и днями до ResetRun.</summary>
+    public static bool TryTakeShovel()
+    {
+        if (HasShovel || !IsDayEventDone(KeeperNoteInteractable.ReadEventId))
+        {
+            return false;
+        }
+
+        HasShovel = true;
+        FlagsChanged?.Invoke();
+        AddNote("Взял лопату в магазине. Теперь можно расчистить сугробы.");
+        return true;
+    }
+
     /// <summary>Отогреть письмо у печи: нечёткое письмо становится чётким.</summary>
     public static void WarmLetter(int letterNumber)
     {
@@ -212,6 +227,7 @@ public static class GameState
         NoticedBarePaw = false;
         RedPickupHelped = false;
         HasGlove = false;
+        HasShovel = false;
         DoneDayEvents.Clear();
         Observations.Clear();
         Notes.Clear();
