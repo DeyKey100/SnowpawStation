@@ -43,6 +43,14 @@ namespace StarterAssets
 		[Tooltip("Maximum camera pitch magnitude. Keeps the camera from flipping upside down.")]
 		public float CameraPitchLimit = 89.0f;
 
+		[Header("Fixed room camera (optional)")]
+		[Tooltip("Let a separate scene camera handle look input instead of rotating the player camera target.")]
+		public bool UseExternalCameraControl;
+		[Tooltip("Optional camera whose horizontal axes define movement. Leave empty for the original controls.")]
+		public Transform MovementReference;
+		[Tooltip("Character turning speed when using camera-relative movement, in degrees per second.")]
+		public float MovementTurnSpeed = 540.0f;
+
 		// cinemachine
 		private float _cinemachineTargetPitch;
 		private float _cameraYaw;
@@ -119,7 +127,7 @@ namespace StarterAssets
 
 		private void LateUpdate()
 		{
-			if (PlayerControlLock.IsLocked)
+			if (PlayerControlLock.IsLocked || UseExternalCameraControl)
 			{
 				return;
 			}
@@ -277,12 +285,39 @@ namespace StarterAssets
 			// if there is a move input rotate player when the player is moving
 			if (moveInput != Vector2.zero)
 			{
-				// move
-				inputDirection = transform.right * moveInput.x + transform.forward * moveInput.y;
+				if (MovementReference != null)
+				{
+					// Keep WASD aligned with the screen, independent of the character's facing.
+					inputDirection = GetCameraRelativeDirection(MovementReference.rotation, moveInput);
+					if (inputDirection.sqrMagnitude > _threshold)
+					{
+						Quaternion facing = Quaternion.LookRotation(inputDirection, Vector3.up);
+						transform.rotation = Quaternion.RotateTowards(
+							transform.rotation, facing, MovementTurnSpeed * Time.deltaTime);
+					}
+				}
+				else
+				{
+					inputDirection = transform.right * moveInput.x + transform.forward * moveInput.y;
+				}
 			}
 
 			// move the player
 			_controller.Move(inputDirection.normalized * (_speed * Time.deltaTime) + new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
+		}
+
+		/// <summary>Projects camera axes onto the floor, preserving screen-relative WASD at steep pitch.</summary>
+		public static Vector3 GetCameraRelativeDirection(Quaternion cameraRotation, Vector2 input)
+		{
+			Vector3 forward = Vector3.ProjectOnPlane(cameraRotation * Vector3.forward, Vector3.up);
+			if (forward.sqrMagnitude < 0.0001f)
+			{
+				// A directly overhead camera still has a useful screen-up direction.
+				forward = Vector3.ProjectOnPlane(cameraRotation * Vector3.up, Vector3.up);
+			}
+			forward.Normalize();
+			Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+			return Vector3.ClampMagnitude(right * input.x + forward * input.y, 1.0f);
 		}
 
 		// Прыжка нет: персонаж только ходит. Гравитация остаётся, чтобы не улетать с краёв

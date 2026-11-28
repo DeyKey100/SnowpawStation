@@ -10012,7 +10012,7 @@ MonoBehaviour:
   plateWorldOffsetY: 1.2
   targetSceneName: HouseInterior
   movePlayerToSpawn: 1
-  spawnPosition: {x: -3.1, y: 0.02, z: 0}
+  spawnPosition: {x: -1.35, y: 0.02, z: 0}
   spawnYaw: 270
   playerTag: Player
   activateDistance: 1.5

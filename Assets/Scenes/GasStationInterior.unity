@@ -422,7 +422,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &448268606
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3315,7 +3315,7 @@ MonoBehaviour:
   plateWorldOffsetY: 1.2
   targetSceneName: HouseInterior
   movePlayerToSpawn: 1
-  spawnPosition: {x: 0, y: 0.5, z: 2.5}
+  spawnPosition: {x: 0, y: 0.5, z: 0.65}
   spawnYaw: 180
   playerTag: Player
   activateDistance: 1.5

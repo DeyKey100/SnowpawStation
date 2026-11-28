@@ -10,6 +10,7 @@
   <Project Path="Unity.RenderPipelines.Core.Runtime.csproj" />
   <Project Path="Unity.Mathematics.csproj" />
   <Project Path="Unity.Cinemachine.Editor.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Unity.Timeline.Editor.csproj" />
   <Project Path="Unity.Multiplayer.Center.Editor.csproj" />
   <Project Path="UnityEngine.UI.csproj" />
@@ -49,9 +50,9 @@
   <Project Path="Unity.VisualScripting.Flow.csproj" />
   <Project Path="Unity.Splines.Editor.csproj" />
   <Project Path="Unity.PerformanceTesting.csproj" />
+  <Project Path="com.IvanMurzak.Unity.MCP.Cinemachine.Editor.csproj" />
   <Project Path="Unity.InputSystem.ForUI.csproj" />
   <Project Path="Unity.TextMeshPro.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Unity.Cloud.Common.Embedded.csproj" />
   <Project Path="Unity.TextMeshPro.Editor.csproj" />
   <Project Path="Unity.Rendering.LightTransport.Runtime.csproj" />
@@ -86,6 +87,7 @@
   <Project Path="Unity.AppUI.Undo.csproj" />
   <Project Path="com.IvanMurzak.Unity.MCP.TestFiles.csproj" />
   <Project Path="com.IvanMurzak.Unity.MCP.Navigation.Editor.csproj" />
+  <Project Path="com.IvanMurzak.Unity.MCP.Timeline.Editor.csproj" />
   <Project Path="Unity.InputSystem.ForUI.Editor.csproj" />
   <Project Path="Unity.CollabProxy.Editor.csproj" />
   <Project Path="Unity.RenderPipeline.Universal.ShaderLibrary.csproj" />
