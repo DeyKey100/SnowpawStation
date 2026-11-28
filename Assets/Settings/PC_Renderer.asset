@@ -16,11 +16,11 @@ MonoBehaviour:
   _shader: {fileID: 4800000, guid: 33990011223344aabbcc33dd44ee55f2, type: 3}
   settings:
     colorDepth: 31
-    ditherStrength: 0.186
+    ditherStrength: 0.197
     pixelSize: 7
-    desaturation: 0
+    desaturation: 0.052
     darkness: 0
-    warmthShift: 0
+    warmthShift: 0.388
     noiseAmount: 0
     vignetteStrength: 0
     renderPassEvent: 600

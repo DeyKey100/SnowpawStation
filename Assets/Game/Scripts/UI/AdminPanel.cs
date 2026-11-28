@@ -199,7 +199,7 @@ public sealed class AdminPanel : MonoBehaviour
             }
         }
 
-        // PS1-разрешение: переключатель для дебага, чтобы сравнивать вид на ходу.
+        // Bayer Dither включён в PC_Renderer.asset; старый PS1-переключатель удалён.
         PsxLowResolution psx = PsxLowResolution.Instance;
         if (psx != null)
         {
