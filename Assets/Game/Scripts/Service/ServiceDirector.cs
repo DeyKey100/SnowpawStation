@@ -575,13 +575,38 @@ public sealed class ServiceDirector : MonoBehaviour
 
     private void CompleteOrder()
     {
-        if (CurrentOrder == null)
+        if (CurrentOrder == null || CurrentStage == OrderStage.Departing)
         {
             return;
         }
 
         CurrentStage = OrderStage.Departing;
-        Order done = CurrentOrder;
+        if (DialogueManager.IsActive)
+        {
+            StartCoroutine(WaitForDialogueThenComplete(CurrentOrder));
+            return;
+        }
+
+        FinishCompletedOrder(CurrentOrder);
+    }
+
+    private System.Collections.IEnumerator WaitForDialogueThenComplete(Order order)
+    {
+        // К следующему кадру DialogueManager успеет открыть реплику из очереди.
+        do
+        {
+            yield return null;
+        }
+        while (CurrentOrder == order && CurrentStage == OrderStage.Departing && DialogueManager.IsActive);
+
+        if (CurrentOrder == order && CurrentStage == OrderStage.Departing)
+        {
+            FinishCompletedOrder(order);
+        }
+    }
+
+    private void FinishCompletedOrder(Order done)
+    {
         if (queue.Count > 0 && queue[0].id == done.id)
         {
             queue.RemoveAt(0);

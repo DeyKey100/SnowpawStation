@@ -78,9 +78,6 @@ public sealed partial class FuelingMinigame : MonoBehaviour
     private bool gaugeVisible;
     private float poured;
     private float capFlashTimer;
-    private bool resultVisible;
-    private string resultTitle = "ПРИНЯТО";
-    private Color32 resultColor = Cream;
 
     private Vector2 pointer;
     private Vector2 tipWorld;
@@ -210,7 +207,6 @@ public sealed partial class FuelingMinigame : MonoBehaviour
 
         active = false;
         done = false;
-        resultVisible = false;
         onFinished = null;
         RestoreCursor();
     }
@@ -249,9 +245,6 @@ public sealed partial class FuelingMinigame : MonoBehaviour
         gaugeVisible = false;
         poured = 0f;
         capFlashTimer = 0f;
-        resultVisible = false;
-        resultTitle = "ПРИНЯТО";
-        resultColor = Cream;
 
         pointer = new Vector2(HomeX, HomeY);
         tipWorld = new Vector2(HomeX, HomeY);
@@ -273,7 +266,6 @@ public sealed partial class FuelingMinigame : MonoBehaviour
 
         active = false;
         done = false;
-        resultVisible = false;
 
         Action<FuelingResult> callback = onFinished;
         onFinished = null;
@@ -281,16 +273,6 @@ public sealed partial class FuelingMinigame : MonoBehaviour
 
         RestoreCursor();
         callback?.Invoke(new FuelingResult(liters, committed));
-    }
-
-    private void Commit()
-    {
-        if (!done)
-        {
-            return;
-        }
-
-        EndGame(true);
     }
 
     // ---------- Кадр ----------
@@ -310,9 +292,9 @@ public sealed partial class FuelingMinigame : MonoBehaviour
 
         FitPanel();
         ReadInput(out Vector2 pointerCanvas, out bool leftDown, out bool leftHeld, out bool rightDown,
-            out bool spaceDown, out bool escapeDown);
+            out bool escapeDown);
 
-        UpdateState(Mathf.Min(Time.deltaTime, 0.05f), pointerCanvas, leftDown, leftHeld, rightDown, spaceDown, escapeDown);
+        UpdateState(Mathf.Min(Time.deltaTime, 0.05f), pointerCanvas, leftDown, leftHeld, rightDown, escapeDown);
 
         if (active)
         {
@@ -321,7 +303,7 @@ public sealed partial class FuelingMinigame : MonoBehaviour
     }
 
     private void ReadInput(out Vector2 pointerCanvas, out bool leftDown, out bool leftHeld, out bool rightDown,
-        out bool spaceDown, out bool escapeDown)
+        out bool escapeDown)
     {
 #if ENABLE_INPUT_SYSTEM
         Mouse mouse = Mouse.current;
@@ -330,14 +312,12 @@ public sealed partial class FuelingMinigame : MonoBehaviour
         leftDown = mouse != null && mouse.leftButton.wasPressedThisFrame;
         leftHeld = mouse != null && mouse.leftButton.isPressed;
         rightDown = mouse != null && mouse.rightButton.wasPressedThisFrame;
-        spaceDown = keyboard != null && keyboard.spaceKey.wasPressedThisFrame;
         escapeDown = keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
 #else
         Vector2 screen = Input.mousePosition;
         leftDown = Input.GetMouseButtonDown(0);
         leftHeld = Input.GetMouseButton(0);
         rightDown = Input.GetMouseButtonDown(1);
-        spaceDown = Input.GetKeyDown(KeyCode.Space);
         escapeDown = Input.GetKeyDown(KeyCode.Escape);
 #endif
         Vector2 gui = new Vector2(screen.x, Screen.height - screen.y);
@@ -347,8 +327,23 @@ public sealed partial class FuelingMinigame : MonoBehaviour
     }
 
     private void UpdateState(float dt, Vector2 pointerCanvas, bool leftDown, bool leftHeld, bool rightDown,
-        bool spaceDown, bool escapeDown)
+        bool escapeDown)
     {
+        if (done)
+        {
+            // Сдаём заказ после анимации крышки, без отдельного экрана результата.
+            if (capAnim == 0f)
+            {
+                EndGame(true);
+            }
+            else
+            {
+                capAnim = Mathf.MoveTowards(capAnim, 0f, dt * 6f);
+            }
+
+            return;
+        }
+
         pointer = pointerCanvas;
 
         float targetCap = capOpen ? 1f : 0f;
@@ -389,16 +384,6 @@ public sealed partial class FuelingMinigame : MonoBehaviour
         }
 
         UpdateHovers();
-
-        if (done)
-        {
-            if (spaceDown || leftDown || escapeDown)
-            {
-                Commit();
-            }
-
-            return;
-        }
 
         if (escapeDown)
         {
@@ -492,7 +477,8 @@ public sealed partial class FuelingMinigame : MonoBehaviour
             capOpen = false;
             if (poured >= target * MinRatio)
             {
-                FinishOrder();
+                done = true;
+                UpdateHovers();
             }
             else
             {
@@ -500,35 +486,6 @@ public sealed partial class FuelingMinigame : MonoBehaviour
                 UpdateHint();
             }
         }
-    }
-
-    private void FinishOrder()
-    {
-        done = true;
-        holding = false;
-        carrying = false;
-        plugged = false;
-        UpdateHovers();
-        UpdateHint();
-
-        float ratio = poured / target;
-        if (ratio > OverRatio)
-        {
-            resultTitle = "ПЕРЕЛИВ";
-            resultColor = Bad;
-        }
-        else if (ratio >= GoodRatio)
-        {
-            resultTitle = "ТОЧНО В ЦЕЛЬ";
-            resultColor = Ok;
-        }
-        else
-        {
-            resultTitle = "ПРИНЯТО";
-            resultColor = Ember;
-        }
-
-        resultVisible = true;
     }
 
     // ---------- Наведение ----------
@@ -736,7 +693,8 @@ public sealed partial class FuelingMinigame : MonoBehaviour
         // Мини-игра рисуется поверх HUD и меню.
         GUI.depth = -100;
 
-        UiTheme.Fill(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.02f, 0.03f, 0.05f, 0.5f));
+        // Затемняем мир сильнее, чтобы мини-игра читалась как отдельное окно.
+        UiTheme.Fill(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.02f, 0.03f, 0.05f, 0.78f));
 
         if (Event.current.type == EventType.Repaint)
         {

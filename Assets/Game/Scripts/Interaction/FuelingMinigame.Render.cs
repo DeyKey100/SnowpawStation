@@ -33,10 +33,6 @@ public sealed partial class FuelingMinigame
         frame.ApplyPs1(3.5f);
 
         DrawHint(frame);
-        if (resultVisible)
-        {
-            DrawResultOverlay(frame);
-        }
 
         frame.Upload(texture);
     }
@@ -413,20 +409,6 @@ public sealed partial class FuelingMinigame
         int w = PixelCanvas.TextWidth(hintText, 1);
         int x = Mathf.FloorToInt((PixelCanvas.W - w) * 0.5f);
         c.Text(hintText, x, PixelCanvas.H - 12, 1, Cream);
-    }
-
-    private void DrawResultOverlay(PixelCanvas c)
-    {
-        c.FillRectPixels(0, 0, PixelCanvas.W, PixelCanvas.H, Rgba(10, 14, 22, 0.78f));
-
-        int titleW = PixelCanvas.TextWidth(resultTitle, 2);
-        int titleX = Mathf.FloorToInt((PixelCanvas.W - titleW) * 0.5f);
-        c.Text(resultTitle, titleX, 74, 2, resultColor);
-
-        const string prompt = "[ПРОБЕЛ] — ЗАКРЫТЬ";
-        int hintW = PixelCanvas.TextWidth(prompt, 1);
-        int hintX = Mathf.FloorToInt((PixelCanvas.W - hintW) * 0.5f);
-        c.Text(prompt, hintX, 100, 1, Muted);
     }
 
     // ---------- Служебное ----------

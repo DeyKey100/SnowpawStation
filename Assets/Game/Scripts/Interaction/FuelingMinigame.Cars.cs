@@ -9,7 +9,6 @@ public sealed partial class FuelingMinigame
     private static readonly Color32 EmberDeep = Hex(0xb8762e);
     private static readonly Color32 Ok = Hex(0x8fd694);
     private static readonly Color32 Bad = Hex(0xe2564a);
-    private static readonly Color32 Muted = Hex(0xa1adc2);
 
     private static Color32 Hex(uint hex) => new Color32((byte)(hex >> 16), (byte)(hex >> 8), (byte)hex, 255);
 
